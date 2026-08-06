@@ -1,0 +1,19 @@
+EVALUATE
+VAR EventRows =
+    FILTER(
+        ALL('Kusto Query Result'),
+        'Kusto Query Result'[cameraId] = __CAMERA_ID__
+            &&
+        'Kusto Query Result'[receivedAtUtc] >= __START_TS__
+            && 'Kusto Query Result'[receivedAtUtc] <= __END_TS__
+            && NOT ISBLANK('Kusto Query Result'[peakToPeakDisplacement])
+    )
+RETURN
+    SUMMARIZE(
+        EventRows,
+        'Kusto Query Result'[cameraId],
+        'Kusto Query Result'[receivedAtUtc],
+        'Kusto Query Result'[peakToPeakDisplacementThreshold],
+        'Kusto Query Result'[peakToPeakDisplacement]
+    )
+ORDER BY [cameraId] ASC, [receivedAtUtc] ASC

@@ -1,0 +1,9 @@
+EVALUATE
+TOPN(
+    50,
+    SUMMARIZECOLUMNS(
+        'Kusto Query Result'[cameraId],
+        "receivedAtUtc", CALCULATE(MAX('Kusto Query Result'[receivedAtUtc]), NOT ISBLANK('Kusto Query Result'[ChunkBase64]))
+    ),
+    [receivedAtUtc], DESC
+)

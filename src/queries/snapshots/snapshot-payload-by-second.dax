@@ -1,0 +1,24 @@
+EVALUATE
+VAR StartTs = DATE(__YEAR__, __MONTH__, __DAY__) + TIME(__HOUR__, __MINUTE__, __SECOND__)
+VAR EndTs = StartTs + TIME(0, 0, 1)
+RETURN
+SELECTCOLUMNS(
+    FILTER(
+        'Kusto Query Result',
+        'Kusto Query Result'[cameraId] = __CAMERA_ID__
+            && 'Kusto Query Result'[receivedAtUtc] >= StartTs
+            && 'Kusto Query Result'[receivedAtUtc] < EndTs
+            && NOT ISBLANK('Kusto Query Result'[ChunkBase64])
+    ),
+    "cameraId", 'Kusto Query Result'[cameraId],
+    "receivedAtUtc", 'Kusto Query Result'[receivedAtUtc],
+    "sourceTopic", 'Kusto Query Result'[sourceTopic],
+    "controlTopic", 'Kusto Query Result'[controlTopic],
+    "contentType", 'Kusto Query Result'[contentType],
+    "peakToPeakDisplacementThreshold", 'Kusto Query Result'[peakToPeakDisplacementThreshold],
+    "peakToPeakDisplacement", 'Kusto Query Result'[peakToPeakDisplacement],
+    "imagePayloadLength", 'Kusto Query Result'[imagePayloadLength],
+    "ChunkIndex", 'Kusto Query Result'[ChunkIndex],
+    "ChunkBase64", 'Kusto Query Result'[ChunkBase64]
+)
+ORDER BY [ChunkIndex] ASC

@@ -1,0 +1,7 @@
+activeProfile: default
+profiles:
+  default:
+    semanticModels:
+      barcelonaModel:
+        workspaceId: 13bbc938-199d-497c-84ab-79afafbaf7fb
+        itemId: c5b64dc0-3ee9-498d-b86d-616f4b311d54
