@@ -45,6 +45,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                         <p>At the top of the app, you will find:</p>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>Vibration Alert Triage title and subtitle</li>
+                            <li>Clickable title that returns you to Live Images</li>
                             <li>View switch</li>
                             <li>Live Images</li>
                             <li>Saved Image Notes</li>
@@ -63,13 +64,14 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
                                 <li>A live status panel with last refresh time</li>
                                 <li>Countdown to next refresh</li>
+                                <li>Timezone selector</li>
                                 <li>Refresh interval selector</li>
                                 <li>Guidance about automatic refresh and freeze behavior</li>
                                 <li>Camera cards for each available camera snapshot</li>
-                                <li>A shared toggle to show or hide displacement visuals</li>
-                                <li>A displacement mini chart on each camera card</li>
-                                <li>A small displacement histogram next to the mini chart</li>
-                                <li>A 24-hour device timeline on each camera card</li>
+                                <li>A shared Show displacement / Hide displacement toggle</li>
+                                <li>A displacement mini panel on each camera card when details are shown</li>
+                                <li>A displacement table on each camera card when details are shown</li>
+                                <li>A 24-hour device timeline on each camera card when details are shown</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
@@ -80,6 +82,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Saved image cards</li>
                                 <li>Capture metadata</li>
                                 <li>Author and save time</li>
+                                <li>Timezone selector</li>
                                 <li>Download action</li>
                                 <li>Prominent note text area</li>
                                 <li>Search and camera filters</li>
@@ -108,6 +111,17 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
                                 <li>You can set refresh frequency with the Refresh every selector.</li>
                                 <li>A countdown shows how many seconds remain until the next update.</li>
+                                <li>Last refresh time is shown in the selected timezone.</li>
+                            </ol>
+                        </div>
+                        <div className="space-y-200">
+                            <SubTitle>Timezone Handling</SubTitle>
+                            <p>All source timestamps come in as UTC, but the app can display them in your preferred timezone.</p>
+                            <ol className="list-decimal space-y-100 pl-500 text-foreground">
+                                <li>The timezone selector defaults to CET.</li>
+                                <li>Your timezone choice is remembered for the next visit.</li>
+                                <li>Displayed dates and times are converted to the selected timezone.</li>
+                                <li>Image age remains correct because age is calculated from the original UTC timestamp.</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
@@ -124,13 +138,14 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
                                 <li>It is derived from the CONTROL value.</li>
                                 <li>CONTROL is split by slash characters.</li>
-                                <li>The resulting namespace parts are shown in a readable sequence.</li>
+                                <li>The resulting namespace parts are shown as Company, Country, City, Building, Line, and Sensor.</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
                             <SubTitle>Show / Hide Displacement Visuals</SubTitle>
                             <p>Each camera card has a visuals toggle in the card header.</p>
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
+                                <li>The default first-load button label is Show details, which means the extra visuals start hidden until you open them.</li>
                                 <li>The toggle applies to all camera cards at once.</li>
                                 <li>Your last choice is remembered and reused after refresh or reopen.</li>
                             </ol>
@@ -143,7 +158,15 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>A marker line represents threshold.</li>
                                 <li>The numeric readout shows current and threshold values.</li>
                                 <li>Over-threshold conditions are highlighted.</li>
-                                <li>A small histogram summarizes recent displacement distribution.</li>
+                            </ol>
+                        </div>
+                        <div className="space-y-200">
+                            <SubTitle>Displacement Histogram</SubTitle>
+                            <p>Each card also shows a compact summary table for recent displacement values.</p>
+                            <ol className="list-decimal space-y-100 pl-500 text-foreground">
+                                <li>The table has two columns: Displacement and Count.</li>
+                                <li>Counts are grouped by rounded displacement value.</li>
+                                <li>The table uses the same compact panel height as the other displacement visuals.</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
@@ -283,10 +306,11 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>No live cards visible: Switch to Live Images view and wait one refresh cycle.</li>
                             <li>No saved items visible: Switch to Saved Image Notes and confirm at least one saved entry exists.</li>
+                            <li>Times look wrong for your location: Change the timezone selector. Age stays correct because it is calculated from UTC.</li>
                             <li>Freeze is bold with update indicator: Unfreeze to apply the new image.</li>
                             <li>Image not shown: Check for payload mismatch/truncation warnings in the card or dialog.</li>
                             <li>Timeline shows no events: Confirm the semantic model has recent rows for the selected camera.</li>
-                            <li>Timeline or histogram looks sparse: That can happen when events are filtered by the 24-hour window or when many chunks collapse to one event.</li>
+                            <li>Timeline or displacement table looks sparse: That can happen when events are filtered by the 24-hour window or when many chunks collapse to one event.</li>
                         </ol>
                     </section>
                 </div>

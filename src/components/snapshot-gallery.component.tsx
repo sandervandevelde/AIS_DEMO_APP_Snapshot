@@ -448,6 +448,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     const [pendingFrozenUpdates, setPendingFrozenUpdates] = useState<Record<string, boolean>>({});
     const [recentEventsByCamera, setRecentEventsByCamera] = useState<Record<string, RecentEventRow[]>>({});
     const [recentEventsError, setRecentEventsError] = useState<string | null>(null);
+    const [detailsAutoFrozenCameraId, setDetailsAutoFrozenCameraId] = useState<string | null>(null);
     const [timeZone, setTimeZone] = useState<string>(() => {
         if (typeof window === "undefined") return DEFAULT_TIME_ZONE;
 
@@ -873,7 +874,13 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     }
 
     function openDetails(row: SnapshotRow): void {
-        toggleFrozen(row.cameraId, true);
+        if (!frozenCameraIds[row.cameraId]) {
+            toggleFrozen(row.cameraId, true);
+            setDetailsAutoFrozenCameraId(row.cameraId);
+        } else {
+            setDetailsAutoFrozenCameraId(null);
+        }
+
         setSelectedRow(row);
         setSaveNote("");
     }
@@ -882,11 +889,12 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         if (isSaving) return;
         const cameraId = selectedRow?.cameraId;
 
-        if (cameraId && pendingFrozenUpdates[cameraId]) {
-            // Apply the pending image update when returning to the main panel.
+        if (cameraId && detailsAutoFrozenCameraId === cameraId) {
+            // Remove the temporary freeze added for the details dialog.
             toggleFrozen(cameraId, false);
         }
 
+        setDetailsAutoFrozenCameraId(null);
         setSelectedRow(null);
         setSaveNote("");
     }
@@ -1052,7 +1060,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                             onClick={() => setShowDisplacementVisuals((current) => !current)}
                                             className="rounded-md border border-border bg-background px-200 py-100 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
-                                            {showDisplacementVisuals ? "Hide details" : "Show details"}
+                                            {showDisplacementVisuals ? "Hide displacement" : "Show displacement"}
                                         </button>
                                         <label className={hasPendingFrozenUpdate
                                             ? "flex items-center gap-200 text-200 font-semibold text-foreground"
@@ -1076,11 +1084,20 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                         Image not rendered because the base64 payload length does not match the expected length.
                                     </div>
                                 ) : (
-                                    <SnapshotImage
-                                        base64={row.imagePayloadBase64}
-                                        contentType={row.contentType}
-                                        alt={`Camera ${row.cameraId} snapshot at ${formatDateTime(row.receivedAtUtc, timeZone)}`}
-                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => openDetails(row)}
+                                        className="block w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        aria-label={`Open details for camera ${row.cameraId}`}
+                                        title="Open details"
+                                    >
+                                        <SnapshotImage
+                                            base64={row.imagePayloadBase64}
+                                            contentType={row.contentType}
+                                            alt={`Camera ${row.cameraId} snapshot at ${formatDateTime(row.receivedAtUtc, timeZone)}`}
+                                            className="h-[280px] w-full bg-muted object-contain transition-opacity hover:opacity-95"
+                                        />
+                                    </button>
                                 )}
                                 {payloadLooksTruncated(row) ? (
                                     <div className="border-t border-destructive/40 bg-destructive/10 px-300 py-200 text-200 text-destructive">
