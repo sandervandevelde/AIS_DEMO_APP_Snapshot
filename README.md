@@ -1,5 +1,22 @@
 # Vibration Alert Triage
 
+## From Blog Post to Production-Ready App
+
+This repository is the companion implementation of the blog post:
+
+[Turning Microsoft Fabric into a factory operations control center: RTSP snapshots in Fabric Apps](https://sandervandevelde.wordpress.com/2026/08/07/turning-microsoft-fabric-into-a-factory-operations-control-center-rtsp-snapshots-in-fabric-apps/)
+
+The post explains the full process of turning industrial camera streams and event telemetry into an operator-ready control center. In short, the journey follows this flow:
+
+1. Capture operational snapshot and vibration context from factory-facing sources.
+2. Shape and expose that data through a Fabric-friendly analytics model.
+3. Build a Fabric App experience for live triage, per-device inspection, and historical note-taking.
+4. Add operator workflow features such as freeze/unfreeze, event timelines, displacement context, and proposal tracking.
+5. Persist user-driven records (notes and proposals) through Rayfin-backed entities.
+6. Deploy and run the solution in Fabric so teams can monitor, investigate, and collaborate in one place.
+
+If you want the narrative and architectural rationale, read the blog post first. If you want the working implementation, continue with this repository.
+
 Vibration Alert Triage is a real-time operations application built for fast, reliable incident review of camera-based vibration events.
 
 It combines live image monitoring, event context, and operator collaboration in one focused workflow so teams can detect anomalies, inspect evidence, and preserve findings without leaving the app.
@@ -54,6 +71,17 @@ The app is intentionally optimized for real-world alert handling:
 - Microsoft Fabric semantic model querying
 - Rayfin-backed app data and proposal persistence
 - Azure/Fabric deployment pipeline for hosted runtime delivery
+
+## Built with Rayfin + Fabric Apps
+
+This solution is implemented as a Fabric App with Rayfin as the application data layer.
+
+- Fabric Apps provides the hosted app runtime and the integration point with semantic model data used by the live monitoring experience.
+- Rayfin provides structured persistence for operational entities such as saved snapshot notes and app proposals, including identity-aware access behavior.
+- The frontend uses Fabric semantic model queries for live camera/event telemetry while using Rayfin services for user-authored records and workflow state.
+- Deployment is handled through the Rayfin workflow, which packages static assets, applies data configuration, and publishes the application into the target Fabric workspace.
+
+In practice, this pairing gives the app a strong split of responsibilities: Fabric for analytics and operational telemetry context, and Rayfin for secure transactional app data and lifecycle management.
 
 ## In Short
 
