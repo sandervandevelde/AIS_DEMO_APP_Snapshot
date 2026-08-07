@@ -435,6 +435,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     const [nextRefreshAt, setNextRefreshAt] = useState<number>(() => Date.now() + REFRESH_INTERVAL_MS);
     const [secondsUntilRefresh, setSecondsUntilRefresh] = useState<number>(Math.ceil(REFRESH_INTERVAL_MS / 1000));
     const [selectedRow, setSelectedRow] = useState<SnapshotRow | null>(null);
+    const [selectedSavedSnapshot, setSelectedSavedSnapshot] = useState<SavedSnapshotRecord | null>(null);
     const [saveNote, setSaveNote] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [savedSnapshots, setSavedSnapshots] = useState<SavedSnapshotRecord[]>([]);
@@ -907,6 +908,29 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         }
     }
 
+    function openSavedDetails(item: SavedSnapshotRecord): void {
+        setSelectedSavedSnapshot(item);
+    }
+
+    function closeSavedDetails(): void {
+        setSelectedSavedSnapshot(null);
+    }
+
+    function handleDownloadSavedSelected(): void {
+        if (!selectedSavedSnapshot) return;
+
+        const errorMessage = downloadSnapshotImage({
+            cameraId: selectedSavedSnapshot.cameraId,
+            receivedAtUtc: selectedSavedSnapshot.receivedAtUtc,
+            contentType: selectedSavedSnapshot.contentType,
+            imagePayloadBase64: selectedSavedSnapshot.imagePayloadBase64,
+        });
+
+        if (errorMessage) {
+            setPayloadError(errorMessage);
+        }
+    }
+
     async function handleSaveSelected(): Promise<void> {
         if (!selectedRow) return;
         if (!currentUserId) {
@@ -1349,12 +1373,20 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             {filteredSavedSnapshots.map((item) => (
                                 <article key={item.id} className="rounded-xl border bg-card p-300">
                                     <div className="grid grid-cols-1 gap-300 lg:grid-cols-[minmax(0,380px)_1fr]">
-                                        <SnapshotImage
-                                            base64={item.imagePayloadBase64}
-                                            contentType={item.contentType}
-                                            alt={`Saved camera ${item.cameraId} snapshot`}
-                                            className="h-[260px] w-full rounded-md bg-muted object-contain"
-                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => openSavedDetails(item)}
+                                            className="block w-full cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            aria-label={`Open saved details for camera ${item.cameraId}`}
+                                            title="Open saved details"
+                                        >
+                                            <SnapshotImage
+                                                base64={item.imagePayloadBase64}
+                                                contentType={item.contentType}
+                                                alt={`Saved camera ${item.cameraId} snapshot`}
+                                                className="h-[260px] w-full rounded-md bg-muted object-contain transition-opacity hover:opacity-95"
+                                            />
+                                        </button>
                                         <div className="space-y-100 text-200 text-foreground">
                                             <p><span className="font-semibold">Camera:</span> {item.cameraId}</p>
                                             <p><span className="font-semibold">Captured:</span> {formatDateTime(item.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
@@ -1366,7 +1398,14 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                                     {item.note || "-"}
                                                 </p>
                                             </div>
-                                            <div className="pt-200">
+                                            <div className="flex flex-wrap gap-200 pt-200">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openSavedDetails(item)}
+                                                    className="rounded-md border border-border bg-background px-300 py-100 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                >
+                                                    Details (read-only)
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => {
@@ -1462,6 +1501,61 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                 className="rounded-md border border-border bg-foreground px-300 py-200 text-200 font-semibold text-background disabled:opacity-60"
                             >
                                 {isSaving ? "Saving..." : "Save To Notes List"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
+            {selectedSavedSnapshot ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-400">
+                    <div className="max-h-[95vh] w-full max-w-[1200px] overflow-auto rounded-xl border bg-card p-400">
+                        <div className="mb-300 flex items-center justify-between">
+                            <h2 className="text-400 font-semibold text-foreground">
+                                Camera {selectedSavedSnapshot.cameraId} - {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}
+                            </h2>
+                            <button
+                                type="button"
+                                onClick={closeSavedDetails}
+                                className="rounded-md border border-border bg-background px-300 py-100 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                        <SnapshotImage
+                            base64={selectedSavedSnapshot.imagePayloadBase64}
+                            contentType={selectedSavedSnapshot.contentType}
+                            alt={`Saved camera ${selectedSavedSnapshot.cameraId} detail view`}
+                            className="mb-300 h-[68vh] w-full rounded-md bg-muted object-contain"
+                        />
+
+                        <div className="space-y-100 text-200 text-foreground">
+                            <p><span className="font-semibold">Camera:</span> {selectedSavedSnapshot.cameraId}</p>
+                            <p><span className="font-semibold">Captured:</span> {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
+                            <p><span className="font-semibold">Added by:</span> {selectedSavedSnapshot.addedByName || "Unknown"}</p>
+                            <p><span className="font-semibold">Added at:</span> {formatDateTime(selectedSavedSnapshot.addedAt, timeZone)} {selectedTimeZoneLabel}</p>
+                            <p><span className="font-semibold">Source:</span> {selectedSavedSnapshot.sourceTopic || "-"}</p>
+                            <p><span className="font-semibold">Control:</span> {selectedSavedSnapshot.controlTopic || "-"}</p>
+                            <p><span className="font-semibold">Content type:</span> {selectedSavedSnapshot.contentType || "-"}</p>
+                        </div>
+
+                        <label className="mt-300 flex flex-col gap-100 text-200 text-foreground">
+                            <span className="font-semibold">Notes (read-only)</span>
+                            <textarea
+                                value={selectedSavedSnapshot.note || ""}
+                                readOnly
+                                className="min-h-[120px] rounded-md border border-border bg-background px-300 py-200 text-200 text-foreground"
+                            />
+                        </label>
+
+                        <div className="mt-300 flex flex-wrap gap-200">
+                            <button
+                                type="button"
+                                onClick={handleDownloadSavedSelected}
+                                className="rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                Download Selected Image
                             </button>
                         </div>
                     </div>

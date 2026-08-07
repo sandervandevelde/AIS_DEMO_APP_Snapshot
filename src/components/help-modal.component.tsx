@@ -87,6 +87,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Prominent note text area</li>
                                 <li>Search and camera filters</li>
                                 <li>Search across saved note content and metadata</li>
+                                <li>Read-only details dialog for saved log items</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
@@ -145,7 +146,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <SubTitle>Show / Hide Displacement Visuals</SubTitle>
                             <p>Each camera card has a visuals toggle in the card header.</p>
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
-                                <li>The default first-load button label is Show details, which means the extra visuals start hidden until you open them.</li>
+                                <li>The default first-load button label is Show displacement, which means the extra visuals start hidden until you open them.</li>
                                 <li>The toggle applies to all camera cards at once.</li>
                                 <li>Your last choice is remembered and reused after refresh or reopen.</li>
                             </ol>
@@ -211,7 +212,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
 
                     <section className="space-y-200">
                         <SectionTitle>6. Details Dialog</SectionTitle>
-                        <p>Open by selecting Details on a camera card.</p>
+                        <p>Open by selecting Details or by clicking the live camera image on a camera card.</p>
                         <p>What you can do:</p>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>View a larger version of the image</li>
@@ -223,7 +224,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <SubTitle>Automatic Freeze on Open</SubTitle>
                             <p>When Details opens for a camera:</p>
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
-                                <li>That camera is automatically frozen</li>
+                                <li>That camera is automatically frozen if it was not manually frozen already</li>
                                 <li>This keeps the viewed image stable while inspecting details</li>
                             </ol>
                         </div>
@@ -233,6 +234,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <ol className="list-decimal space-y-100 pl-500 text-foreground">
                                 <li>You get a notice that a newer image is available</li>
                                 <li>On closing Details, the main panel refreshes to the newest image automatically</li>
+                                <li>If the freeze was added automatically for the dialog, it is removed when you close the dialog</li>
                             </ol>
                         </div>
                         <div className="space-y-200">
@@ -262,11 +264,23 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>Details dialog in Live Images mode</li>
                             <li>Each card in Saved Image Notes mode</li>
+                            <li>Read-only details dialog in Saved Image Notes mode</li>
                         </ol>
                     </section>
 
                     <section className="space-y-200">
-                        <SectionTitle>9. Data Integrity and Warnings</SectionTitle>
+                        <SectionTitle>9. Saved Log Details (Read-only)</SectionTitle>
+                        <p>Saved Image Notes includes a details dialog that mirrors the live details layout but keeps log content read-only.</p>
+                        <ol className="list-decimal space-y-100 pl-500 text-foreground">
+                            <li>Open by clicking a saved image or selecting Details (read-only).</li>
+                            <li>View a large preview and full metadata for the saved item.</li>
+                            <li>Read the note in a non-editable field.</li>
+                            <li>Download the selected saved image from the dialog.</li>
+                        </ol>
+                    </section>
+
+                    <section className="space-y-200">
+                        <SectionTitle>10. Data Integrity and Warnings</SectionTitle>
                         <p>If payload validation fails:</p>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>The app may show decode or truncation warnings</li>
@@ -276,7 +290,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                     </section>
 
                     <section className="space-y-200">
-                        <SectionTitle>10. App Proposals</SectionTitle>
+                        <SectionTitle>11. App Proposals</SectionTitle>
                         <p>The proposals tab is used to collect future feature ideas and track their status.</p>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>Create a proposal with a title, description, and priority.</li>
@@ -289,7 +303,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                     </section>
 
                     <section className="space-y-200">
-                        <SectionTitle>11. Recommended Workflow</SectionTitle>
+                        <SectionTitle>12. Recommended Workflow</SectionTitle>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>Start in Live Images view</li>
                             <li>Freeze a camera when you spot an interesting event</li>
@@ -302,7 +316,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                     </section>
 
                     <section className="space-y-200">
-                        <SectionTitle>12. Troubleshooting Tips</SectionTitle>
+                        <SectionTitle>13. Troubleshooting Tips</SectionTitle>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>No live cards visible: Switch to Live Images view and wait one refresh cycle.</li>
                             <li>No saved items visible: Switch to Saved Image Notes and confirm at least one saved entry exists.</li>

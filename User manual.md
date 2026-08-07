@@ -32,7 +32,7 @@ You will see:
 5. Refresh interval selector
 6. Guidance about automatic refresh and freeze behavior
 7. Camera cards for each available camera snapshot
-8. Shared Show details / Hide details toggle
+8. Shared Show displacement / Hide displacement toggle
 9. Displacement detail panels when details are shown
 10. 24H device timeline when details are shown
 
@@ -49,6 +49,7 @@ You will see:
 5. Download action
 6. Prominent note text area
 7. Search and camera filters
+8. Read-only details dialog for saved log items
 
 ### App Proposals
 
@@ -98,11 +99,11 @@ Each camera card includes a Universal Namespace sub-panel.
 2. CONTROL is split by slash characters.
 3. The resulting namespace parts are shown as Company, Country, City, Building, Line, and Sensor.
 
-### Show / Hide Details
+### Show / Hide Displacement Visuals
 
 Each camera card has a shared details toggle in the header.
 
-1. The default first-load state is Show details, which means the extra visuals start hidden.
+1. The default first-load state is Show displacement, which means the extra visuals start hidden.
 2. The toggle applies to all camera cards.
 3. Your last choice is remembered and reused.
 
@@ -158,6 +159,7 @@ When you unfreeze:
 ## 6. Details Dialog
 
 Open by selecting Details on a camera card.
+You can also open it by clicking the live camera image.
 
 What you can do
 
@@ -170,7 +172,7 @@ What you can do
 
 When Details opens for a camera:
 
-1. That camera is automatically frozen
+1. That camera is automatically frozen if it was not manually frozen already
 2. This keeps the viewed image stable while inspecting details
 
 ### New Image During Details
@@ -179,6 +181,7 @@ If a new image arrives while Details is open:
 
 1. You get a notice that a newer image is available
 2. On closing Details, the main panel refreshes to the newest image automatically
+3. If freeze was added automatically for the dialog, it is removed on close.
 
 ### Added By Field
 
@@ -202,8 +205,18 @@ You can download images from:
 
 1. Details dialog in Live Images mode
 2. Each card in Saved Image Notes mode
+3. Read-only details dialog in Saved Image Notes mode
 
-## 9. Data Integrity and Warnings
+## 9. Saved Log Details (Read-only)
+
+Saved Image Notes includes a read-only details dialog for saved log items.
+
+1. Open by clicking a saved image or by selecting Details (read-only).
+2. View a larger preview with full saved metadata.
+3. Review the saved note in a non-editable field.
+4. Download the selected saved image from the dialog.
+
+## 10. Data Integrity and Warnings
 
 If payload validation fails:
 
@@ -211,7 +224,7 @@ If payload validation fails:
 2. Unreliable images are not rendered as normal snapshots
 3. Save action is blocked for known incomplete payloads
 
-## 10. Recommended Workflow
+## 11. Recommended Workflow
 
 1. Start in Live Images view
 2. Freeze a camera when you spot an interesting event
@@ -221,7 +234,7 @@ If payload validation fails:
 6. Switch to Saved Image Notes for comparison and reporting
 7. Use App Proposals to log future improvements
 
-## 11. Troubleshooting Tips
+## 12. Troubleshooting Tips
 
 1. No live cards visible: Switch to Live Images view and wait one refresh cycle.
 2. No saved items visible: Switch to Saved Image Notes and confirm at least one saved entry exists.
