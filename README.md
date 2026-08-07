@@ -2,6 +2,8 @@
 
 ## From Blog Post to Production-Ready App
 
+<img width="1060" height="866" alt="image" src="https://github.com/user-attachments/assets/d23bc21a-653e-4fae-92a3-9b29c8a7c4a8" />
+
 This repository is the companion implementation of the blog post:
 
 [Turning Microsoft Fabric into a factory operations control center: RTSP snapshots in Fabric Apps](https://sandervandevelde.wordpress.com/2026/08/07/turning-microsoft-fabric-into-a-factory-operations-control-center-rtsp-snapshots-in-fabric-apps/)
