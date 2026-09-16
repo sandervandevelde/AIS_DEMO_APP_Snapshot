@@ -5,7 +5,7 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { type CachedQueryResult } from "@microsoft/fabric-app-data";
 import { getFabricClient } from "@/lib/fabric-client";
 
@@ -16,6 +16,8 @@ interface UseSemanticModelQueryOptions {
     query: string;
     /** If true, skip reading from cache (still writes the fresh result). */
     bypassCache?: boolean;
+    /** If false, do not execute the query. */
+    enabled?: boolean;
 }
 
 interface UseSemanticModelQueryResult {
@@ -67,15 +69,17 @@ interface UseSemanticModelQueryResult {
 export function useSemanticModelQuery(
     options: UseSemanticModelQueryOptions,
 ): UseSemanticModelQueryResult {
-    const { connection, query, bypassCache } = options;
+    const { connection, query, bypassCache, enabled = true } = options;
     const [data, setData] = useState<CachedQueryResult | undefined>();
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | undefined>();
+    const isExecuting = useRef(false);
 
-    const canExecute = Boolean(connection && query);
+    const canExecute = enabled && Boolean(connection && query);
 
     const execute = useCallback(async () => {
-        if (!canExecute) return;
+        if (!canExecute || isExecuting.current) return;
+        isExecuting.current = true;
         setIsLoading(true);
         setError(undefined);
 
@@ -93,10 +97,13 @@ export function useSemanticModelQuery(
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
             setIsLoading(false);
+            isExecuting.current = false;
         }
     }, [connection, query, bypassCache, canExecute]);
 
     useEffect(() => {
+        // Async query execution intentionally updates state from this effect.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         execute();
     }, [execute]);
 

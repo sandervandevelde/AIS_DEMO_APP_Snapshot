@@ -8,14 +8,30 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import App from "@/App";
+import { AuthContext } from "@/hooks/auth.context";
+
+function renderApp() {
+    return render(
+        <AuthContext.Provider
+            value={{
+                session: null,
+                isAuthenticated: false,
+                isLoading: false,
+                error: null,
+            }}
+        >
+            <App />
+        </AuthContext.Provider>,
+    );
+}
 
 describe("App", () => {
     it("renders without throwing", () => {
-        expect(() => render(<App />)).not.toThrow();
+        expect(() => renderApp()).not.toThrow();
     });
 
     it("mounts content into the document", () => {
-        render(<App />);
+        renderApp();
         expect(document.body).not.toBeEmptyDOMElement();
     });
 });

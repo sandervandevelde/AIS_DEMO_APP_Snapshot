@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/hooks/auth.context";
 import {
@@ -71,7 +71,7 @@ export function AppProposals() {
         high: true,
     });
 
-    async function refreshProposals(): Promise<void> {
+    const refreshProposals = useCallback(async (): Promise<void> => {
         if (!currentUserId) {
             setProposals([]);
             return;
@@ -89,11 +89,13 @@ export function AppProposals() {
         } finally {
             setIsLoading(false);
         }
-    }
+    }, [currentUserId]);
 
     useEffect(() => {
+        // Async proposal loading intentionally updates state from this effect.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         void refreshProposals();
-    }, [currentUserId]);
+    }, [currentUserId, refreshProposals]);
 
     const filteredProposals = useMemo(() => {
         const search = searchText.trim().toLowerCase();

@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { QueryTable } from "@microsoft/fabric-app-data";
+import { Eye, EyeOff, Snowflake, Trash2 } from "lucide-react";
 
 import { getFabricClient } from "@/lib/fabric-client";
 import { useSemanticModelQuery } from "@/hooks/use-semantic-model-query";
 import { useAuth } from "@/hooks/auth.context";
-import { latestSnapshots, recentEventsLast24Hours, snapshotPayloadBySecond } from "@/queries";
+import {
+    latestSnapshots,
+    recentEventsLast24Hours,
+    snapshotPayloadChunk,
+    snapshotPayloadIndexes,
+} from "@/queries";
 import {
     listSavedSnapshots,
+    deleteSavedSnapshot,
     saveSnapshot,
     type SavedSnapshotRecord,
 } from "@/services/saved-snapshot.service";
@@ -33,15 +40,30 @@ type TimeZoneOption = {
 };
 
 const TIME_ZONE_OPTIONS: TimeZoneOption[] = [
-    { value: "Europe/Amsterdam", label: "CET" },
-    { value: "UTC", label: "UTC" },
-    { value: "Europe/London", label: "UK" },
-    { value: "America/New_York", label: "ET" },
-    { value: "America/Chicago", label: "CT" },
-    { value: "America/Denver", label: "MT" },
-    { value: "America/Los_Angeles", label: "PT" },
-    { value: "Asia/Singapore", label: "SGT" },
-    { value: "Asia/Tokyo", label: "JST" },
+    { value: "Etc/GMT+12", label: "UTC-12:00 (AoE)" },
+    { value: "Etc/GMT+11", label: "UTC-11:00 (NUT)" },
+    { value: "Etc/GMT+10", label: "UTC-10:00 (HST)" },
+    { value: "Etc/GMT+9", label: "UTC-09:00 (AKST)" },
+    { value: "Etc/GMT+8", label: "UTC-08:00 (PST)" },
+    { value: "Etc/GMT+7", label: "UTC-07:00 (MST)" },
+    { value: "Etc/GMT+6", label: "UTC-06:00 (CST)" },
+    { value: "Etc/GMT+5", label: "UTC-05:00 (EST)" },
+    { value: "Etc/GMT+4", label: "UTC-04:00 (AST)" },
+    { value: "Etc/GMT+3", label: "UTC-03:00 (BRT)" },
+    { value: "Etc/GMT+2", label: "UTC-02:00 (GST)" },
+    { value: "Etc/GMT+1", label: "UTC-01:00 (CVT)" },
+    { value: "UTC", label: "UTC+00:00 (UTC)" },
+    { value: "Europe/Amsterdam", label: "UTC+01:00 (CET)" },
+    { value: "Etc/GMT-2", label: "UTC+02:00 (EET)" },
+    { value: "Etc/GMT-3", label: "UTC+03:00 (MSK)" },
+    { value: "Etc/GMT-4", label: "UTC+04:00 (GST)" },
+    { value: "Etc/GMT-5", label: "UTC+05:00 (PKT)" },
+    { value: "Etc/GMT-6", label: "UTC+06:00 (BST)" },
+    { value: "Etc/GMT-7", label: "UTC+07:00 (WIB)" },
+    { value: "Etc/GMT-8", label: "UTC+08:00 (CST)" },
+    { value: "Etc/GMT-9", label: "UTC+09:00 (JST)" },
+    { value: "Etc/GMT-10", label: "UTC+10:00 (AEST)" },
+    { value: "Etc/GMT-11", label: "UTC+11:00 (SBT)" },
 ];
 
 const DEFAULT_TIME_ZONE = "Europe/Amsterdam";
@@ -80,6 +102,18 @@ function normalizeSearchText(value: unknown): string {
     return String(value ?? "").trim().toLowerCase();
 }
 
+function formatCameraName(cameraId: string | number, controlTopic: string): string {
+    const namespaceParts = controlTopic
+        .split("/")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+    const buildingLineSensor = namespaceParts.slice(-3);
+
+    return buildingLineSensor.length === 3 && buildingLineSensor.every((value) => value && value !== "-")
+        ? buildingLineSensor.join("/")
+        : `Camera ${cameraId}`;
+}
+
 function buildSavedSnapshotSearchText(item: SavedSnapshotRecord): string {
     return [
         item.id,
@@ -100,6 +134,7 @@ function buildSavedSnapshotSearchText(item: SavedSnapshotRecord): string {
 interface SnapshotMetadataRow {
     cameraId: number;
     receivedAtUtc: string;
+    imagePayloadLength: number;
 }
 
 interface SnapshotImageProps {
@@ -132,9 +167,44 @@ interface RecentEventRow {
     peakToPeakDisplacement: number | null;
 }
 
+interface CachedPayload {
+    receivedAtUtc: string;
+    row: SnapshotRow;
+}
+
 const REFRESH_INTERVAL_MS = 10000;
-const REFRESH_INTERVAL_OPTIONS_SECONDS = Array.from({ length: 12 }, (_, index) => (index + 1) * 5);
+const REFRESH_INTERVAL_OPTIONS = [
+    { seconds: 10, label: "10 seconds" },
+    { seconds: 30, label: "30 seconds" },
+    { seconds: 60, label: "60 seconds" },
+    { seconds: 5 * 60, label: "5 minutes" },
+    { seconds: 15 * 60, label: "15 minutes" },
+    { seconds: 30 * 60, label: "30 minutes" },
+];
 const DISPLACEMENT_VISUALS_PREFERENCE_KEY = "snapshot-gallery-show-displacement-visuals";
+const HIDDEN_CAMERA_IDS_PREFERENCE_KEY = "snapshot-gallery-hidden-camera-ids";
+const HIDDEN_CAMERA_NAMES_PREFERENCE_KEY = "snapshot-gallery-hidden-camera-names";
+const MAX_PARALLEL_FABRIC_QUERIES = 2;
+
+async function mapWithConcurrency<T, TResult>(
+    items: T[],
+    mapper: (item: T) => Promise<TResult>,
+    concurrency: number,
+): Promise<TResult[]> {
+    const results: TResult[] = [];
+    let nextIndex = 0;
+
+    async function worker(): Promise<void> {
+        while (nextIndex < items.length) {
+            const currentIndex = nextIndex;
+            nextIndex += 1;
+            results[currentIndex] = await mapper(items[currentIndex]);
+        }
+    }
+
+    await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+    return results;
+}
 
 function normalizeColumnName(name: string): string {
     const bracketMatch = name.match(/\[([^\]]+)\]$/);
@@ -142,7 +212,7 @@ function normalizeColumnName(name: string): string {
         return bracketMatch[1].trim().toLowerCase();
     }
 
-    return name.replace(/[\[\]\"']/g, "").trim().toLowerCase();
+    return name.replaceAll("[", "").replaceAll("]", "").replaceAll('"', "").replaceAll("'", "").trim().toLowerCase();
 }
 
 function parseModelUtcTimestamp(timestamp: string): Date | null {
@@ -161,9 +231,11 @@ function getColumnIndex(columns: QueryTable["columns"], expected: string): numbe
 function toSnapshotMetadataRows(table: QueryTable): SnapshotMetadataRow[] {
     const cameraIdIndex = getColumnIndex(table.columns, "cameraId");
     const receivedAtUtcIndex = getColumnIndex(table.columns, "receivedAtUtc");
+    const imagePayloadLengthIndex = getColumnIndex(table.columns, "imagePayloadLength");
     if (
         cameraIdIndex === -1
         || receivedAtUtcIndex === -1
+        || imagePayloadLengthIndex === -1
     ) {
         return [];
     }
@@ -176,6 +248,7 @@ function toSnapshotMetadataRows(table: QueryTable): SnapshotMetadataRow[] {
             return {
                 cameraId,
                 receivedAtUtc: String(row[receivedAtUtcIndex] ?? ""),
+                imagePayloadLength: Number(row[imagePayloadLengthIndex] ?? 0),
             };
         })
         .filter((row): row is SnapshotMetadataRow => row !== null);
@@ -383,6 +456,14 @@ function SnapshotImage({ base64, contentType, alt, className }: SnapshotImagePro
     );
 }
 
+function SavedSnapshotIntegrityNotice({ message }: { message: string }) {
+    return (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-300 text-200 text-destructive">
+            Saved image payload is unavailable: {message}
+        </div>
+    );
+}
+
 function payloadLooksTruncated(row: SnapshotRow): boolean {
     return !row.payloadLengthMatches;
 }
@@ -443,12 +524,16 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     const [isSavedLoading, setIsSavedLoading] = useState(false);
     const [savedLogSearch, setSavedLogSearch] = useState("");
     const [savedLogCameraFilter, setSavedLogCameraFilter] = useState<string>("all");
+    const [savedPageSize, setSavedPageSize] = useState<number | "all">(5);
+    const [savedPage, setSavedPage] = useState(1);
     const [panelNowMs, setPanelNowMs] = useState<number>(() => Date.now());
     const [latestFreshRowsByCamera, setLatestFreshRowsByCamera] = useState<Record<string, SnapshotRow>>({});
     const [frozenBaselineByCamera, setFrozenBaselineByCamera] = useState<Record<string, string>>({});
     const [pendingFrozenUpdates, setPendingFrozenUpdates] = useState<Record<string, boolean>>({});
     const [recentEventsByCamera, setRecentEventsByCamera] = useState<Record<string, RecentEventRow[]>>({});
     const [recentEventsError, setRecentEventsError] = useState<string | null>(null);
+    const payloadLoadInFlight = useRef(false);
+    const payloadCache = useRef<Record<string, CachedPayload>>({});
     const [detailsAutoFrozenCameraId, setDetailsAutoFrozenCameraId] = useState<string | null>(null);
     const [timeZone, setTimeZone] = useState<string>(() => {
         if (typeof window === "undefined") return DEFAULT_TIME_ZONE;
@@ -461,26 +546,62 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         const savedPreference = window.localStorage.getItem(DISPLACEMENT_VISUALS_PREFERENCE_KEY);
         return savedPreference == null ? false : savedPreference === "true";
     });
+    const [hiddenCameraIds, setHiddenCameraIds] = useState<Record<string, boolean>>(() => {
+        if (typeof window === "undefined") return {};
+
+        try {
+            const savedPreference = window.localStorage.getItem(HIDDEN_CAMERA_IDS_PREFERENCE_KEY);
+            const parsedPreference: unknown = savedPreference ? JSON.parse(savedPreference) : {};
+
+            if (!parsedPreference || typeof parsedPreference !== "object" || Array.isArray(parsedPreference)) {
+                return {};
+            }
+
+            return Object.fromEntries(
+                Object.entries(parsedPreference).filter((entry): entry is [string, boolean] => entry[1] === true),
+            );
+        } catch {
+            return {};
+        }
+    });
+    const [hiddenCameraNames, setHiddenCameraNames] = useState<Record<string, string>>(() => {
+        if (typeof window === "undefined") return {};
+
+        try {
+            const savedPreference = window.localStorage.getItem(HIDDEN_CAMERA_NAMES_PREFERENCE_KEY);
+            const parsedPreference: unknown = savedPreference ? JSON.parse(savedPreference) : {};
+
+            if (!parsedPreference || typeof parsedPreference !== "object" || Array.isArray(parsedPreference)) {
+                return {};
+            }
+
+            return Object.fromEntries(
+                Object.entries(parsedPreference).filter(
+                    (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0,
+                ),
+            );
+        } catch {
+            return {};
+        }
+    });
 
     const { data, isLoading, error, refetch } = useSemanticModelQuery({
         connection,
         query,
         bypassCache: true,
+        enabled: viewMode === "live",
     });
 
-    async function triggerRefresh() {
+    const triggerRefresh = useCallback(async () => {
         setNextRefreshAt(Date.now() + refreshIntervalMs);
         setSecondsUntilRefresh(refreshIntervalSeconds);
         await refetch();
-    }
-
-    useEffect(() => {
-        setNextRefreshAt(Date.now() + refreshIntervalMs);
-        setSecondsUntilRefresh(refreshIntervalSeconds);
-    }, [refreshIntervalMs, refreshIntervalSeconds]);
+    }, [refreshIntervalMs, refreshIntervalSeconds, refetch]);
 
     useEffect(() => {
         if (data?.status === "success") {
+            // The refresh timestamp is derived from the completed query result.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setLastRefreshUtc(new Date());
         }
     }, [data]);
@@ -488,6 +609,14 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     useEffect(() => {
         window.localStorage.setItem(DISPLACEMENT_VISUALS_PREFERENCE_KEY, String(showDisplacementVisuals));
     }, [showDisplacementVisuals]);
+
+    useEffect(() => {
+        window.localStorage.setItem(HIDDEN_CAMERA_IDS_PREFERENCE_KEY, JSON.stringify(hiddenCameraIds));
+    }, [hiddenCameraIds]);
+
+    useEffect(() => {
+        window.localStorage.setItem(HIDDEN_CAMERA_NAMES_PREFERENCE_KEY, JSON.stringify(hiddenCameraNames));
+    }, [hiddenCameraNames]);
 
     useEffect(() => {
         window.localStorage.setItem(TIME_ZONE_PREFERENCE_KEY, timeZone);
@@ -499,7 +628,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         }, refreshIntervalMs);
 
         return () => window.clearInterval(timerId);
-    }, [refetch, refreshIntervalMs]);
+    }, [refreshIntervalMs, triggerRefresh]);
 
     useEffect(() => {
         const countdownId = window.setInterval(() => {
@@ -523,11 +652,19 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         return toSnapshotMetadataRows(data.table);
     }, [data]);
 
+    const activeMetadataRows = useMemo(() => {
+        return metadataRows.filter((metadata) => !hiddenCameraIds[String(metadata.cameraId)]);
+    }, [hiddenCameraIds, metadataRows]);
+
     useEffect(() => {
         let cancelled = false;
 
         async function loadPayloads() {
-            if (metadataRows.length === 0) {
+            if (viewMode !== "live") {
+                return;
+            }
+
+            if (activeMetadataRows.length === 0) {
                 setRows((currentRows) => currentRows.filter((row) => frozenCameraIds[row.cameraId]));
                 setLatestFreshRowsByCamera({});
                 setPendingFrozenUpdates({});
@@ -537,45 +674,89 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
             setPayloadError(null);
 
-            const payloadResults = await Promise.all(
-                metadataRows.map(async (metadata) => {
-                    const payloadQuery = snapshotPayloadBySecond({
-                        cameraId: metadata.cameraId,
-                        receivedAtUtc: metadata.receivedAtUtc,
-                    });
+            const payloadResults = await mapWithConcurrency(activeMetadataRows, async (metadata) => {
+                const cachedPayload = payloadCache.current[String(metadata.cameraId)];
+                if (cachedPayload?.receivedAtUtc === metadata.receivedAtUtc) {
+                    return cachedPayload.row;
+                }
 
-                    const payloadResult = await getFabricClient()
-                        .semanticModel(connection)
-                        .query(payloadQuery, { bypassCache: true });
+                        const indexResult = await getFabricClient()
+                            .semanticModel(connection)
+                            .query(snapshotPayloadIndexes(metadata), { bypassCache: true });
 
-                    if (payloadResult.status !== "success") {
-                        throw new Error(payloadResult.error.message);
+                        if (indexResult.status !== "success") {
+                            throw new Error(indexResult.error.message);
+                        }
+
+                        const chunkIndexColumn = getColumnIndex(indexResult.table.columns, "ChunkIndex");
+                        const chunkIndexes = chunkIndexColumn === -1
+                            ? []
+                            : indexResult.table.rows
+                                .map((row) => Number(row[chunkIndexColumn]))
+                                .filter((chunkIndex) => Number.isFinite(chunkIndex));
+
+                        const uniqueChunkIndexes = Array.from(new Set(chunkIndexes)).sort((first, second) => first - second);
+
+                    const payloadResults = await mapWithConcurrency(uniqueChunkIndexes, async (chunkIndex) => {
+                            const payloadQuery = snapshotPayloadChunk({
+                                cameraId: metadata.cameraId,
+                                receivedAtUtc: metadata.receivedAtUtc,
+                                chunkIndex,
+                            });
+
+                            return getFabricClient()
+                                .semanticModel(connection)
+                                .query(payloadQuery, { bypassCache: true });
+                    }, MAX_PARALLEL_FABRIC_QUERIES);
+
+                    const failedPayloadResult = payloadResults.find((result) => result.status !== "success");
+                    if (failedPayloadResult?.status === "error") {
+                        throw new Error(failedPayloadResult.error.message);
                     }
 
-                    const payloadRow = toPayloadRow(payloadResult.table);
+                    const successfulPayloadResults = payloadResults.filter(
+                        (result): result is Extract<typeof result, { status: "success" }> => result.status === "success",
+                    );
+                    const firstPayloadResult = successfulPayloadResults[0];
+                    const payloadRow = firstPayloadResult
+                        ? toPayloadRow({
+                            ...firstPayloadResult.table,
+                            rows: successfulPayloadResults.flatMap((result) => result.table.rows),
+                        })
+                        : null;
                     if (!payloadRow) return null;
 
                     const normalizedPayload = cleanBase64(payloadRow.imagePayloadBase64);
                     const decodedBytes = decodeBase64Bytes(payloadRow.imagePayloadBase64);
 
-                    return {
+                    const nextRow = {
                         ...payloadRow,
                         encodedPayloadLength: normalizedPayload.length,
                         decodedPayloadLength: decodedBytes?.length ?? null,
                         payloadLengthMatches: decodedBytes?.length === payloadRow.imagePayloadLength,
                     };
-                }),
-            );
+
+                    payloadCache.current[String(metadata.cameraId)] = {
+                        receivedAtUtc: metadata.receivedAtUtc,
+                        row: nextRow,
+                    };
+
+                    return nextRow;
+            }, MAX_PARALLEL_FABRIC_QUERIES);
 
             if (cancelled) return;
 
             const freshRows = payloadResults.filter((row): row is SnapshotRow => row !== null);
 
             try {
-                const uniqueCameraIds = Array.from(new Set(metadataRows.map((row) => row.cameraId)));
+                if (!showDisplacementVisuals) {
+                    setRecentEventsError(null);
+                    setRecentEventsByCamera({});
+                } else {
+                const uniqueCameraIds = Array.from(new Set(activeMetadataRows.map((row) => row.cameraId)));
 
-                const recentEventResults = await Promise.allSettled(
-                    uniqueCameraIds.map(async (cameraId) => {
+                const recentEventResults = await mapWithConcurrency(uniqueCameraIds, async (cameraId) => {
+                    try {
                         const recentEventsResult = await getFabricClient()
                             .semanticModel(connection)
                             .query(recentEventsLast24Hours(cameraId), { bypassCache: true });
@@ -584,9 +765,14 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             throw new Error(`Camera ${cameraId}: ${recentEventsResult.error.message}`);
                         }
 
-                        return toRecentEventRows(recentEventsResult.table);
-                    }),
-                );
+                        return {
+                            status: "fulfilled" as const,
+                            value: toRecentEventRows(recentEventsResult.table),
+                        };
+                    } catch (reason) {
+                        return { status: "rejected" as const, reason };
+                    }
+                }, MAX_PARALLEL_FABRIC_QUERIES);
 
                 const groupedByCamera: Record<string, RecentEventRow[]> = {};
                 const recentEventErrors: string[] = [];
@@ -611,6 +797,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
                 setRecentEventsByCamera(groupedByCamera);
                 setRecentEventsError(recentEventErrors.length > 0 ? recentEventErrors.join(" | ") : null);
+                }
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 setRecentEventsError(message);
@@ -654,18 +841,27 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
             });
         }
 
+        if (payloadLoadInFlight.current) {
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        payloadLoadInFlight.current = true;
         void loadPayloads().catch((err) => {
             if (!cancelled) {
                 const message = err instanceof Error ? err.message : String(err);
                 setPayloadError(message);
                 setRows([]);
             }
+        }).finally(() => {
+            payloadLoadInFlight.current = false;
         });
 
         return () => {
             cancelled = true;
         };
-    }, [connection, frozenBaselineByCamera, frozenCameraIds, metadataRows]);
+    }, [activeMetadataRows, connection, frozenBaselineByCamera, frozenCameraIds, metadataRows, showDisplacementVisuals, viewMode]);
 
     const selectedTimeZoneLabel = TIME_ZONE_OPTIONS.find((option) => option.value === timeZone)?.label ?? timeZone;
 
@@ -674,8 +870,49 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         : "Waiting for first successful refresh";
 
     const visibleRows = useMemo(() => {
-        return [...rows].sort((first, second) => Number(first.cameraId) - Number(second.cameraId));
+        return rows
+            .filter((row) => !hiddenCameraIds[row.cameraId])
+            .sort((first, second) => Number(first.cameraId) - Number(second.cameraId));
+    }, [hiddenCameraIds, rows]);
+
+    const hiddenCameraIdList = useMemo(() => {
+        return Object.keys(hiddenCameraIds).sort((first, second) => Number(first) - Number(second));
+    }, [hiddenCameraIds]);
+
+    const currentCameraNames = useMemo(() => {
+        return new Map(rows.map((row) => [row.cameraId, formatCameraName(row.cameraId, row.controlTopic)]));
     }, [rows]);
+
+    function setCameraHidden(cameraId: string, isHidden: boolean, cameraName?: string): void {
+        setHiddenCameraIds((current) => {
+            const next = { ...current };
+
+            if (isHidden) {
+                next[cameraId] = true;
+            } else {
+                delete next[cameraId];
+            }
+
+            return next;
+        });
+
+        setHiddenCameraNames((current) => {
+            const next = { ...current };
+
+            if (isHidden && cameraName) {
+                next[cameraId] = cameraName;
+            } else if (!isHidden) {
+                delete next[cameraId];
+            }
+
+            return next;
+        });
+    }
+
+    function unhideAllCameras(): void {
+        setHiddenCameraIds({});
+        setHiddenCameraNames({});
+    }
 
     function buildTimelineScaleMax(cameraEvents: RecentEventRow[]): number {
         const values = cameraEvents.flatMap((eventRow) => [
@@ -775,7 +1012,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
     const currentUserId = session?.user?.id ?? "";
     const currentUserDisplayName = session?.user?.email ?? "Unknown";
 
-    async function refreshSavedSnapshots(): Promise<void> {
+    const refreshSavedSnapshots = useCallback(async (): Promise<void> => {
         if (!currentUserId) {
             setSavedSnapshots([]);
             return;
@@ -793,21 +1030,40 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         } finally {
             setIsSavedLoading(false);
         }
-    }
-
-    useEffect(() => {
-        void refreshSavedSnapshots();
     }, [currentUserId]);
 
+    useEffect(() => {
+        // Async saved-record loading intentionally updates state from this effect.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        void refreshSavedSnapshots();
+    }, [currentUserId, refreshSavedSnapshots]);
+
     const savedCameraOptions = useMemo(() => {
-        const uniqueCameraIds = new Set(savedSnapshots.map((item) => String(item.cameraId)));
+        const uniqueCameraIds = new Set(
+            savedSnapshots
+                .filter((item) => !hiddenCameraIds[String(item.cameraId)])
+                .map((item) => String(item.cameraId)),
+        );
         return Array.from(uniqueCameraIds).sort((first, second) => Number(first) - Number(second));
+    }, [hiddenCameraIds, savedSnapshots]);
+
+    const savedCameraNames = useMemo(() => {
+        return new Map(
+            savedSnapshots.map((item) => [
+                String(item.cameraId),
+                formatCameraName(item.cameraId, item.controlTopic),
+            ]),
+        );
     }, [savedSnapshots]);
 
     const filteredSavedSnapshots = useMemo(() => {
         const searchTerm = savedLogSearch.trim().toLowerCase();
 
         return savedSnapshots.filter((item) => {
+            if (hiddenCameraIds[String(item.cameraId)]) {
+                return false;
+            }
+
             if (savedLogCameraFilter !== "all" && String(item.cameraId) !== savedLogCameraFilter) {
                 return false;
             }
@@ -818,7 +1074,18 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
             return buildSavedSnapshotSearchText(item).includes(searchTerm);
         });
-    }, [savedLogCameraFilter, savedLogSearch, savedSnapshots]);
+    }, [hiddenCameraIds, savedLogCameraFilter, savedLogSearch, savedSnapshots]);
+
+    const savedPageCount = savedPageSize === "all"
+        ? 1
+        : Math.max(1, Math.ceil(filteredSavedSnapshots.length / savedPageSize));
+    const currentSavedPage = Math.min(savedPage, savedPageCount);
+    const paginatedSavedSnapshots = savedPageSize === "all"
+        ? filteredSavedSnapshots
+        : filteredSavedSnapshots.slice(
+            (currentSavedPage - 1) * savedPageSize,
+            currentSavedPage * savedPageSize,
+        );
 
     function toggleFrozen(cameraId: string, isFrozen: boolean) {
         setFrozenCameraIds((current) => {
@@ -931,6 +1198,31 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
         }
     }
 
+    async function handleDeleteSavedSnapshot(item: SavedSnapshotRecord): Promise<void> {
+        if (!currentUserId) {
+            setSavedError("Cannot delete a saved image because user identity is missing.");
+            return;
+        }
+
+        if (!window.confirm(`Delete the saved image for ${formatCameraName(item.cameraId, item.controlTopic)}?`)) {
+            return;
+        }
+
+        setIsSavedLoading(true);
+        setSavedError(null);
+
+        try {
+            await deleteSavedSnapshot(item.id, currentUserId);
+            setSavedSnapshots((current) => current.filter((saved) => saved.id !== item.id));
+            setSelectedSavedSnapshot((current) => current?.id === item.id ? null : current);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setSavedError(message);
+        } finally {
+            setIsSavedLoading(false);
+        }
+    }
+
     async function handleSaveSelected(): Promise<void> {
         if (!selectedRow) return;
         if (!currentUserId) {
@@ -974,15 +1266,41 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
             <section className="mx-auto max-w-[1400px] p-600">
                 {viewMode === "live" ? (
                     <div className="mb-500 flex flex-wrap items-center justify-between gap-300 rounded-xl border bg-card p-400">
-                        <div>
+                        <div className="min-w-0 flex-1">
                             <p className="text-200 text-muted-foreground">Live snapshots from semantic model</p>
                             <p className="text-300 font-semibold text-foreground">{statusText}</p>
                             <p className="text-200 text-muted-foreground">Next refresh in {secondsUntilRefresh}s</p>
                             <p className="mt-200 text-200 text-muted-foreground">
                                 Automatic refresh runs on the selected interval. Enable Freeze on a panel to keep that camera on its current image.
                             </p>
+                            {hiddenCameraIdList.length > 0 ? (
+                                <div className="mt-300 flex flex-wrap items-center gap-200 border-t border-border pt-200 text-200 text-muted-foreground">
+                                    <span>Hidden cameras</span>
+                                    {hiddenCameraIdList.map((cameraId) => (
+                                        <button
+                                            key={cameraId}
+                                            type="button"
+                                            onClick={() => setCameraHidden(cameraId, false)}
+                                            className="inline-flex items-center gap-100 rounded-md border border-border bg-background px-200 py-100 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            title={`Show ${hiddenCameraNames[cameraId] ?? currentCameraNames.get(cameraId) ?? `Camera ${cameraId}`}`}
+                                        >
+                                            <Eye className="h-4 w-4" aria-hidden="true" />
+                                            Show {hiddenCameraNames[cameraId] ?? currentCameraNames.get(cameraId) ?? `Camera ${cameraId}`}
+                                        </button>
+                                    ))}
+                                    {hiddenCameraIdList.length > 1 ? (
+                                        <button
+                                            type="button"
+                                            onClick={unhideAllCameras}
+                                            className="rounded-md border border-border bg-background px-200 py-100 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            Show all
+                                        </button>
+                                    ) : null}
+                                </div>
+                            ) : null}
                         </div>
-                        <div className="flex flex-wrap items-center gap-300">
+                        <div className="flex shrink-0 flex-wrap items-center gap-300">
                             <label className="flex items-center gap-200 text-200 text-muted-foreground">
                                 <span>Timezone</span>
                                 <select
@@ -999,11 +1317,16 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                 <span>Refresh every</span>
                                 <select
                                     value={refreshIntervalSeconds}
-                                    onChange={(event) => setRefreshIntervalSeconds(Number(event.target.value))}
+                                    onChange={(event) => {
+                                        const seconds = Number(event.target.value);
+                                        setRefreshIntervalSeconds(seconds);
+                                        setNextRefreshAt(Date.now() + seconds * 1000);
+                                        setSecondsUntilRefresh(seconds);
+                                    }}
                                     className="rounded-lg border bg-background px-300 py-200 text-200 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
-                                    {REFRESH_INTERVAL_OPTIONS_SECONDS.map((seconds) => (
-                                        <option key={seconds} value={seconds}>{seconds} seconds</option>
+                                    {REFRESH_INTERVAL_OPTIONS.map((option) => (
+                                        <option key={option.seconds} value={option.seconds}>{option.label}</option>
                                     ))}
                                 </select>
                             </label>
@@ -1052,9 +1375,15 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                     </div>
                 ) : null}
 
-                {!isLoading && visibleRows.length === 0 && viewMode === "live" ? (
+                {!isLoading && visibleRows.length === 0 && viewMode === "live" && rows.length === 0 ? (
                     <div className="rounded-xl border bg-card p-500 text-300 text-muted-foreground">
                         No snapshots are available yet.
+                    </div>
+                ) : null}
+
+                {!isLoading && visibleRows.length === 0 && viewMode === "live" && rows.length > 0 ? (
+                    <div className="rounded-xl border bg-card p-500 text-300 text-muted-foreground">
+                        All available cameras are hidden. Use the controls above to show a camera again.
                     </div>
                 ) : null}
 
@@ -1069,9 +1398,9 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                 key={`${row.cameraId}-${row.receivedAtUtc}-${index}`}
                                 className="overflow-hidden rounded-xl border bg-card"
                             >
-                                <div className="flex items-center justify-between border-b border-border px-300 py-200">
-                                    <p className="text-300 font-semibold text-foreground">Camera {row.cameraId}</p>
-                                    <div className="flex items-center gap-300">
+                                <div className="flex flex-col gap-200 border-b border-border px-300 py-200">
+                                    <p className="text-300 font-semibold text-foreground">{formatCameraName(row.cameraId, row.controlTopic)}</p>
+                                    <div className="flex flex-wrap items-center gap-300">
                                         <button
                                             type="button"
                                             onClick={() => openDetails(row)}
@@ -1086,18 +1415,38 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                         >
                                             {showDisplacementVisuals ? "Hide displacement" : "Show displacement"}
                                         </button>
-                                        <label className={hasPendingFrozenUpdate
-                                            ? "flex items-center gap-200 text-200 font-semibold text-foreground"
-                                            : "flex items-center gap-200 text-200 text-muted-foreground"
-                                        }>
-                                            <input
-                                                type="checkbox"
-                                                checked={Boolean(frozenCameraIds[row.cameraId])}
-                                                onChange={(event) => toggleFrozen(row.cameraId, event.target.checked)}
-                                                className="h-4 w-4"
-                                            />
-                                            Freeze
-                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCameraHidden(row.cameraId, true, formatCameraName(row.cameraId, row.controlTopic))}
+                                            aria-label={`Hide ${formatCameraName(row.cameraId, row.controlTopic)}`}
+                                            title={`Hide ${formatCameraName(row.cameraId, row.controlTopic)}`}
+                                            className="inline-flex items-center rounded-md border border-border bg-background p-200 text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <EyeOff className="h-4 w-4" aria-hidden="true" />
+                                            <span className="sr-only">Hide camera</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleFrozen(row.cameraId, !frozenCameraIds[row.cameraId])}
+                                            aria-pressed={Boolean(frozenCameraIds[row.cameraId])}
+                                            aria-label={frozenCameraIds[row.cameraId]
+                                                ? `Unfreeze ${formatCameraName(row.cameraId, row.controlTopic)}`
+                                                : `Freeze ${formatCameraName(row.cameraId, row.controlTopic)}`
+                                            }
+                                            title={frozenCameraIds[row.cameraId]
+                                                ? `Unfreeze ${formatCameraName(row.cameraId, row.controlTopic)}`
+                                                : `Freeze ${formatCameraName(row.cameraId, row.controlTopic)}`
+                                            }
+                                            className={hasPendingFrozenUpdate
+                                                ? "inline-flex items-center gap-100 rounded-md border border-destructive/50 bg-destructive/10 px-200 py-100 text-200 font-semibold text-destructive hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                : frozenCameraIds[row.cameraId]
+                                                    ? "inline-flex items-center gap-100 rounded-md border border-foreground bg-foreground px-200 py-100 text-200 font-semibold text-background hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    : "inline-flex items-center gap-100 rounded-md border border-border bg-background px-200 py-100 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            }
+                                        >
+                                            <Snowflake className="h-4 w-4" aria-hidden="true" />
+                                            <span className="sr-only">{frozenCameraIds[row.cameraId] ? "Unfreeze" : "Freeze"}</span>
+                                        </button>
                                         {hasPendingFrozenUpdate ? (
                                             <span className="text-200 font-semibold text-destructive">Update ready, unfreeze to apply</span>
                                         ) : null}
@@ -1112,13 +1461,13 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                         type="button"
                                         onClick={() => openDetails(row)}
                                         className="block w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                        aria-label={`Open details for camera ${row.cameraId}`}
+                                        aria-label={`Open details for ${formatCameraName(row.cameraId, row.controlTopic)}`}
                                         title="Open details"
                                     >
                                         <SnapshotImage
                                             base64={row.imagePayloadBase64}
                                             contentType={row.contentType}
-                                            alt={`Camera ${row.cameraId} snapshot at ${formatDateTime(row.receivedAtUtc, timeZone)}`}
+                                            alt={`${formatCameraName(row.cameraId, row.controlTopic)} snapshot at ${formatDateTime(row.receivedAtUtc, timeZone)}`}
                                             className="h-[280px] w-full bg-muted object-contain transition-opacity hover:opacity-95"
                                         />
                                     </button>
@@ -1329,7 +1678,10 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             <span className="font-semibold text-foreground">Search all logs</span>
                             <input
                                 value={savedLogSearch}
-                                onChange={(event) => setSavedLogSearch(event.target.value)}
+                                onChange={(event) => {
+                                    setSavedLogSearch(event.target.value);
+                                    setSavedPage(1);
+                                }}
                                 placeholder="Search note, camera, source, control, author, date..."
                                 className="rounded-lg border bg-background px-300 py-200 text-200 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             />
@@ -1339,15 +1691,46 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             <span className="font-semibold text-foreground">Camera</span>
                             <select
                                 value={savedLogCameraFilter}
-                                onChange={(event) => setSavedLogCameraFilter(event.target.value)}
+                                onChange={(event) => {
+                                    setSavedLogCameraFilter(event.target.value);
+                                    setSavedPage(1);
+                                }}
                                 className="rounded-lg border bg-background px-300 py-200 text-200 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                                 <option value="all">All cameras</option>
                                 {savedCameraOptions.map((cameraId) => (
-                                    <option key={cameraId} value={cameraId}>{cameraId}</option>
+                                    <option key={cameraId} value={cameraId}>{savedCameraNames.get(cameraId) ?? `Camera ${cameraId}`}</option>
                                 ))}
                             </select>
                         </label>
+
+                        <fieldset className="flex flex-col gap-100 text-200 text-muted-foreground">
+                            <legend className="font-semibold text-foreground">Items per page</legend>
+                            <div className="inline-flex w-fit rounded-lg border border-border bg-background p-100" role="group" aria-label="Items per page">
+                                {([5, 10, 15, 20, "all"] as const).map((pageSize) => {
+                                    const isSelected = savedPageSize === pageSize;
+                                    const label = pageSize === "all" ? "All" : String(pageSize);
+
+                                    return (
+                                        <button
+                                            key={label}
+                                            type="button"
+                                            aria-pressed={isSelected}
+                                            onClick={() => {
+                                                setSavedPageSize(pageSize);
+                                                setSavedPage(1);
+                                            }}
+                                            className={isSelected
+                                                ? "min-w-10 rounded-md bg-foreground px-200 py-100 text-200 font-semibold text-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                : "min-w-10 rounded-md px-200 py-100 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            }
+                                        >
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </fieldset>
                     </div>
 
                     {savedError ? (
@@ -1370,25 +1753,28 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
                     {filteredSavedSnapshots.length > 0 ? (
                         <div className="space-y-400">
-                            {filteredSavedSnapshots.map((item) => (
+                    {paginatedSavedSnapshots.map((item) => (
                                 <article key={item.id} className="rounded-xl border bg-card p-300">
                                     <div className="grid grid-cols-1 gap-300 lg:grid-cols-[minmax(0,380px)_1fr]">
                                         <button
                                             type="button"
                                             onClick={() => openSavedDetails(item)}
                                             className="block w-full cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                            aria-label={`Open saved details for camera ${item.cameraId}`}
+                                            aria-label={`Open saved details for ${formatCameraName(item.cameraId, item.controlTopic)}`}
                                             title="Open saved details"
                                         >
                                             <SnapshotImage
                                                 base64={item.imagePayloadBase64}
                                                 contentType={item.contentType}
-                                                alt={`Saved camera ${item.cameraId} snapshot`}
+                                                alt={`Saved ${formatCameraName(item.cameraId, item.controlTopic)} snapshot`}
                                                 className="h-[260px] w-full rounded-md bg-muted object-contain transition-opacity hover:opacity-95"
                                             />
                                         </button>
                                         <div className="space-y-100 text-200 text-foreground">
-                                            <p><span className="font-semibold">Camera:</span> {item.cameraId}</p>
+                                            {item.payloadError ? (
+                                                <SavedSnapshotIntegrityNotice message={item.payloadError} />
+                                            ) : null}
+                                            <p><span className="font-semibold">Camera:</span> {formatCameraName(item.cameraId, item.controlTopic)}</p>
                                             <p><span className="font-semibold">Captured:</span> {formatDateTime(item.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
                                             <p><span className="font-semibold">Added by:</span> {item.addedByName || "Unknown"}</p>
                                             <p><span className="font-semibold">Added at:</span> {formatDateTime(item.addedAt, timeZone)} {selectedTimeZoneLabel}</p>
@@ -1421,6 +1807,14 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                                 >
                                                     Download Image
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => void handleDeleteSavedSnapshot(item)}
+                                                    className="inline-flex items-center gap-100 rounded-md border border-destructive/40 bg-destructive/10 px-300 py-100 text-200 font-semibold text-destructive hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                >
+                                                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                                    Delete
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -1428,6 +1822,35 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             ))}
                         </div>
                     ) : null}
+
+                        {filteredSavedSnapshots.length > 0 ? (
+                            <div className="mt-400 flex flex-wrap items-center justify-between gap-300 rounded-xl border bg-card p-300">
+                                <p className="text-200 text-muted-foreground">
+                                    Showing {((currentSavedPage - 1) * (savedPageSize === "all" ? filteredSavedSnapshots.length : savedPageSize)) + 1}
+                                    - {Math.min(currentSavedPage * (savedPageSize === "all" ? filteredSavedSnapshots.length : savedPageSize), filteredSavedSnapshots.length)}
+                                    of {filteredSavedSnapshots.length}
+                                </p>
+                                <div className="flex items-center gap-200">
+                                    <button
+                                        type="button"
+                                        disabled={currentSavedPage <= 1}
+                                        onClick={() => setSavedPage((page) => Math.max(1, page - 1))}
+                                        className="rounded-md border border-border bg-background px-300 py-100 text-200 font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Previous
+                                    </button>
+                                    <span className="text-200 text-muted-foreground">Page {currentSavedPage} of {savedPageCount}</span>
+                                    <button
+                                        type="button"
+                                        disabled={currentSavedPage >= savedPageCount}
+                                        onClick={() => setSavedPage((page) => Math.min(savedPageCount, page + 1))}
+                                        className="rounded-md border border-border bg-background px-300 py-100 text-200 font-semibold text-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        ) : null}
                 </section>
                 ) : null}
 
@@ -1447,7 +1870,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
                         <div className="mb-300 flex items-center justify-between">
                             <h2 className="text-400 font-semibold text-foreground">
-                                Camera {selectedRow.cameraId} - {formatDateTime(selectedRow.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}
+                                {formatCameraName(selectedRow.cameraId, selectedRow.controlTopic)} - {formatDateTime(selectedRow.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}
                             </h2>
                             <button
                                 type="button"
@@ -1466,7 +1889,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                             <SnapshotImage
                                 base64={selectedRow.imagePayloadBase64}
                                 contentType={selectedRow.contentType}
-                                alt={`Camera ${selectedRow.cameraId} detail view`}
+                                alt={`${formatCameraName(selectedRow.cameraId, selectedRow.controlTopic)} detail view`}
                                 className="mb-300 h-[68vh] w-full rounded-md bg-muted object-contain"
                             />
                         )}
@@ -1512,7 +1935,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                     <div className="max-h-[95vh] w-full max-w-[1200px] overflow-auto rounded-xl border bg-card p-400">
                         <div className="mb-300 flex items-center justify-between">
                             <h2 className="text-400 font-semibold text-foreground">
-                                Camera {selectedSavedSnapshot.cameraId} - {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}
+                                {formatCameraName(selectedSavedSnapshot.cameraId, selectedSavedSnapshot.controlTopic)} - {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}
                             </h2>
                             <button
                                 type="button"
@@ -1526,12 +1949,16 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                         <SnapshotImage
                             base64={selectedSavedSnapshot.imagePayloadBase64}
                             contentType={selectedSavedSnapshot.contentType}
-                            alt={`Saved camera ${selectedSavedSnapshot.cameraId} detail view`}
+                            alt={`Saved ${formatCameraName(selectedSavedSnapshot.cameraId, selectedSavedSnapshot.controlTopic)} detail view`}
                             className="mb-300 h-[68vh] w-full rounded-md bg-muted object-contain"
                         />
 
+                        {selectedSavedSnapshot.payloadError ? (
+                            <SavedSnapshotIntegrityNotice message={selectedSavedSnapshot.payloadError} />
+                        ) : null}
+
                         <div className="space-y-100 text-200 text-foreground">
-                            <p><span className="font-semibold">Camera:</span> {selectedSavedSnapshot.cameraId}</p>
+                            <p><span className="font-semibold">Camera:</span> {formatCameraName(selectedSavedSnapshot.cameraId, selectedSavedSnapshot.controlTopic)}</p>
                             <p><span className="font-semibold">Captured:</span> {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
                             <p><span className="font-semibold">Added by:</span> {selectedSavedSnapshot.addedByName || "Unknown"}</p>
                             <p><span className="font-semibold">Added at:</span> {formatDateTime(selectedSavedSnapshot.addedAt, timeZone)} {selectedTimeZoneLabel}</p>
@@ -1556,6 +1983,14 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                 className="rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
                                 Download Selected Image
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void handleDeleteSavedSnapshot(selectedSavedSnapshot)}
+                                className="inline-flex items-center gap-100 rounded-md border border-destructive/40 bg-destructive/10 px-300 py-200 text-200 font-semibold text-destructive hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                                Delete Saved Image
                             </button>
                         </div>
                     </div>

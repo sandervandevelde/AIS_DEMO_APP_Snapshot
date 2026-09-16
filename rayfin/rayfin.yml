@@ -9,6 +9,7 @@ services:
     allowedRedirectUris:
       - http://localhost:5173
       - https://rural-palm-637fd8fb32-westeurope.webapp.fabricapps.net
+      - https://clean-pine-f6247d5272-westeurope.webapp.fabricapps.net
   data:
     enabled: true
     dialect: mssql

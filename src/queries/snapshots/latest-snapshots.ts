@@ -1,6 +1,8 @@
 import type { ColumnMetadataMap } from "@/lib/to-data-table";
 import query from "./latest-snapshots.dax?raw";
 import payloadBySecondTemplate from "./snapshot-payload-by-second.dax?raw";
+import payloadChunkTemplate from "./snapshot-payload-chunk.dax?raw";
+import payloadIndexesTemplate from "./snapshot-payload-indexes.dax?raw";
 import recentEventsTemplate from "./recent-events.dax?raw";
 
 const connection = "barcelonaModel";
@@ -27,6 +29,10 @@ interface SnapshotPayloadQueryParams {
     receivedAtUtc: string;
 }
 
+interface SnapshotPayloadChunkQueryParams extends SnapshotPayloadQueryParams {
+    chunkIndex: number;
+}
+
 export function snapshotPayloadBySecond(params: SnapshotPayloadQueryParams): string {
     const match = params.receivedAtUtc.match(
         /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/,
@@ -46,6 +52,54 @@ export function snapshotPayloadBySecond(params: SnapshotPayloadQueryParams): str
         .replaceAll("__MINUTE__", String(Number(minute)))
         .replaceAll("__SECOND__", String(Number(second)))
         .replaceAll("__CAMERA_ID__", String(params.cameraId));
+}
+
+export function snapshotPayloadChunk(params: SnapshotPayloadChunkQueryParams): string {
+    const match = params.receivedAtUtc.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/,
+    );
+
+    if (!match) {
+        throw new Error(`Invalid snapshot timestamp: ${params.receivedAtUtc}`);
+    }
+
+    const [, year, month, day, hour, minute, second] = match;
+
+    return payloadChunkTemplate
+        .replaceAll("__YEAR__", year)
+        .replaceAll("__MONTH__", String(Number(month)))
+        .replaceAll("__DAY__", String(Number(day)))
+        .replaceAll("__HOUR__", String(Number(hour)))
+        .replaceAll("__MINUTE__", String(Number(minute)))
+        .replaceAll("__SECOND__", String(Number(second)))
+        .replaceAll("__CAMERA_ID__", String(params.cameraId))
+        .replaceAll("__CHUNK_INDEX__", String(params.chunkIndex));
+}
+
+export function snapshotPayloadIndexes(params: SnapshotPayloadQueryParams): string {
+    const match = params.receivedAtUtc.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?$/,
+    );
+
+    if (!match) {
+        throw new Error(`Invalid snapshot timestamp: ${params.receivedAtUtc}`);
+    }
+
+    const [, year, month, day, hour, minute, second] = match;
+
+    return payloadIndexesTemplate
+        .replaceAll("__YEAR__", year)
+        .replaceAll("__MONTH__", String(Number(month)))
+        .replaceAll("__DAY__", String(Number(day)))
+        .replaceAll("__HOUR__", String(Number(hour)))
+        .replaceAll("__MINUTE__", String(Number(minute)))
+        .replaceAll("__SECOND__", String(Number(second)))
+        .replaceAll("__CAMERA_ID__", String(params.cameraId));
+}
+
+export function expectedSnapshotChunkCount(imagePayloadLength: number): number {
+    const base64Length = Math.ceil(imagePayloadLength / 3) * 4;
+    return Math.ceil(base64Length / 3000);
 }
 
 function toDaxDateTimeLiteral(date: Date): string {
