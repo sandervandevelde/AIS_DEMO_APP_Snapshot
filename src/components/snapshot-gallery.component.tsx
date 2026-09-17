@@ -121,8 +121,11 @@ function buildSavedSnapshotSearchText(item: SavedSnapshotRecord): string {
         item.receivedAtUtc,
         item.sourceTopic,
         item.controlTopic,
+        item.universalNamespace,
         item.contentType,
         item.imagePayloadLength,
+        item.peakToPeakDisplacementThreshold,
+        item.peakToPeakDisplacement,
         item.imagePayloadBase64,
         item.note,
         item.addedByName,
@@ -1242,8 +1245,11 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                 receivedAtUtc: selectedRow.receivedAtUtc,
                 sourceTopic: selectedRow.sourceTopic,
                 controlTopic: selectedRow.controlTopic,
+                universalNamespace: selectedRow.controlTopic,
                 contentType: selectedRow.contentType,
                 imagePayloadLength: selectedRow.imagePayloadLength,
+                peakToPeakDisplacementThreshold: selectedRow.peakToPeakDisplacementThreshold,
+                peakToPeakDisplacement: selectedRow.peakToPeakDisplacement,
                 imagePayloadBase64: selectedRow.imagePayloadBase64,
                 note: saveNote,
                 addedByName: currentUserDisplayName,
@@ -1775,7 +1781,10 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                                 <SavedSnapshotIntegrityNotice message={item.payloadError} />
                                             ) : null}
                                             <p><span className="font-semibold">Camera:</span> {formatCameraName(item.cameraId, item.controlTopic)}</p>
+                                            <p className="break-words"><span className="font-semibold">Universal Namespace:</span> {item.universalNamespace || "-"}</p>
                                             <p><span className="font-semibold">Captured:</span> {formatDateTime(item.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
+                                            <p><span className="font-semibold">Displacement:</span> {formatDisplacement(item.peakToPeakDisplacement)}</p>
+                                            <p><span className="font-semibold">Threshold:</span> {formatDisplacement(item.peakToPeakDisplacementThreshold)}</p>
                                             <p><span className="font-semibold">Added by:</span> {item.addedByName || "Unknown"}</p>
                                             <p><span className="font-semibold">Added at:</span> {formatDateTime(item.addedAt, timeZone)} {selectedTimeZoneLabel}</p>
                                             <div className="mt-200 rounded-md border border-border bg-muted/40 p-300">
@@ -1959,7 +1968,10 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
 
                         <div className="space-y-100 text-200 text-foreground">
                             <p><span className="font-semibold">Camera:</span> {formatCameraName(selectedSavedSnapshot.cameraId, selectedSavedSnapshot.controlTopic)}</p>
+                            <p className="break-words"><span className="font-semibold">Universal Namespace:</span> {selectedSavedSnapshot.universalNamespace || "-"}</p>
                             <p><span className="font-semibold">Captured:</span> {formatDateTime(selectedSavedSnapshot.receivedAtUtc, timeZone)} {selectedTimeZoneLabel}</p>
+                            <p><span className="font-semibold">Displacement:</span> {formatDisplacement(selectedSavedSnapshot.peakToPeakDisplacement)}</p>
+                            <p><span className="font-semibold">Threshold:</span> {formatDisplacement(selectedSavedSnapshot.peakToPeakDisplacementThreshold)}</p>
                             <p><span className="font-semibold">Added by:</span> {selectedSavedSnapshot.addedByName || "Unknown"}</p>
                             <p><span className="font-semibold">Added at:</span> {formatDateTime(selectedSavedSnapshot.addedAt, timeZone)} {selectedTimeZoneLabel}</p>
                             <p><span className="font-semibold">Source:</span> {selectedSavedSnapshot.sourceTopic || "-"}</p>

@@ -54,16 +54,20 @@ You will see:
 1. Saved image cards
 2. Capture metadata
 3. Author and save time
-4. Timezone selector
-5. Download action on each card
-6. Prominent note text area
-7. Search across note content and saved metadata
-8. Camera filter showing only cameras that are currently visible on the main page
-9. Items per page controls with 5, 10, 15, 20, or All options
-10. Previous and Next pagination controls with the current result range and total count
-11. Read-only details dialog for saved log items
+4. Saved displacement and threshold values
+5. Full Universal Namespace value
+6. Timezone selector
+7. Download action on each card
+8. Prominent note text area
+9. Search across note content and saved metadata
+10. Camera filter showing only cameras that are currently visible on the main page
+11. Items per page controls with 5, 10, 15, 20, or All options
+12. Previous and Next pagination controls with the current result range and total count
+13. Read-only details dialog for saved log items
 
 The selected page size is exclusive: exactly one option is active at a time. Changing the search text, camera filter, or page size returns the list to page 1.
+
+The camera filter and saved cards use only cameras that are currently visible on the main page. Hiding a camera removes its saved records from this view until the camera is shown again.
 
 ### App Proposals
 
@@ -231,8 +235,12 @@ When saving from Details:
 2. Your note is stored
 3. Author and timestamp are stored
 4. Source topic, control topic, content type, camera, and capture timestamp are stored with the entry
-5. Large image payloads are stored as ordered chunks and reassembled when the saved list is loaded
-6. Saved entries appear in Saved Image Notes view
+5. The displacement and threshold values shown are captured from the live image at the time you save it.
+6. The full Universal Namespace is stored as a separate property on the saved entry.
+7. Large image payloads are stored as ordered chunks and reassembled when the saved list is loaded
+8. Saved entries appear in Saved Image Notes view
+
+Older saved entries without the dedicated Universal Namespace property fall back to their stored control topic when displaying the namespace.
 
 ## 9. Removing Saved Images
 
@@ -259,8 +267,10 @@ Saved Image Notes includes a read-only details dialog for saved log items.
 1. Open by clicking a saved image or by selecting Details (read-only).
 2. View a larger preview with full saved metadata.
 3. Review the saved note in a non-editable field.
-4. Download the selected saved image from the dialog.
-5. Delete the saved image after confirmation.
+4. Review the saved displacement and threshold values captured when the image was saved.
+5. Review the full saved Universal Namespace value.
+6. Download the selected saved image from the dialog.
+7. Delete the saved image after confirmation.
 
 ## 12. Data Integrity and Warnings
 

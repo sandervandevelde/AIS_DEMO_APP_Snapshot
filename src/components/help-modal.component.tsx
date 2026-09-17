@@ -111,6 +111,8 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Saved image cards</li>
                                 <li>Capture metadata</li>
                                 <li>Author and save time</li>
+                                <li>Saved displacement and threshold values</li>
+                                <li>Full Universal Namespace value</li>
                                 <li>Timezone selector</li>
                                 <li>Download action on each card</li>
                                 <li>Prominent note text area</li>
@@ -121,6 +123,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Read-only details dialog for saved log items</li>
                             </ol>
                             <p>The selected page size is exclusive: exactly one option is active at a time. Changing the search text, camera filter, or page size returns the list to page 1.</p>
+                            <p>The camera filter and saved cards use only cameras that are currently visible on the main page. Hiding a camera removes its saved records from this view until the camera is shown again.</p>
                         </div>
                         <div className="space-y-200">
                             <SubTitle icon={Lightbulb}>App Proposals</SubTitle>
@@ -308,9 +311,12 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <li>Your note is stored</li>
                             <li>Author and timestamp are stored</li>
                             <li>Source topic, control topic, content type, camera, and capture timestamp are stored with the entry</li>
+                            <li>The displacement and threshold values shown are captured from the live image at the time you save it</li>
+                            <li>The full Universal Namespace is stored as a separate property on the saved entry</li>
                             <li>Large image payloads are stored as ordered chunks and reassembled when the saved list is loaded</li>
                             <li>Saved entries appear in Saved Image Notes view</li>
                         </ol>
+                        <p>Older saved entries without the dedicated Universal Namespace property fall back to their stored control topic when displaying the namespace.</p>
                     </section>
 
                     <section className="space-y-200">
@@ -342,6 +348,8 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                             <li>Open by clicking a saved image or selecting Details (read-only).</li>
                             <li>View a large preview and full metadata for the saved item.</li>
                             <li>Read the note in a non-editable field.</li>
+                            <li>Review the saved displacement and threshold values captured when the image was saved.</li>
+                            <li>Review the full saved Universal Namespace value.</li>
                             <li>Download the selected saved image from the dialog.</li>
                             <li>Delete the saved image after confirmation.</li>
                         </ol>

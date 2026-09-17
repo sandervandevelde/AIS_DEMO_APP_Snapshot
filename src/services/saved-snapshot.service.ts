@@ -28,8 +28,11 @@ export interface SaveSnapshotInput {
     receivedAtUtc: string;
     sourceTopic: string;
     controlTopic: string;
+    universalNamespace: string;
     contentType: string;
     imagePayloadLength: number;
+    peakToPeakDisplacementThreshold: number | null;
+    peakToPeakDisplacement: number | null;
     imagePayloadBase64: string;
     note: string;
     addedByName: string;
@@ -43,8 +46,11 @@ export interface SavedSnapshotRecord {
     receivedAtUtc: string;
     sourceTopic: string;
     controlTopic: string;
+    universalNamespace: string;
     contentType: string;
     imagePayloadLength: number;
+    peakToPeakDisplacementThreshold: number | null;
+    peakToPeakDisplacement: number | null;
     imagePayloadBase64: string;
     payloadError?: string;
     note: string;
@@ -144,8 +150,11 @@ export async function saveSnapshot(input: SaveSnapshotInput): Promise<void> {
         receivedAtUtc: new Date(input.receivedAtUtc),
         sourceTopic: input.sourceTopic || null,
         controlTopic: input.controlTopic || null,
+        universalNamespace: input.universalNamespace || null,
         contentType: input.contentType,
         imagePayloadLength: input.imagePayloadLength,
+        peakToPeakDisplacementThreshold: input.peakToPeakDisplacementThreshold,
+        peakToPeakDisplacement: input.peakToPeakDisplacement,
         note: input.note || null,
         addedByName: input.addedByName,
         addedByEmail: input.addedByEmail || null,
@@ -214,8 +223,11 @@ export async function listSavedSnapshots(userId: string): Promise<SavedSnapshotR
             "receivedAtUtc",
             "sourceTopic",
             "controlTopic",
+            "universalNamespace",
             "contentType",
             "imagePayloadLength",
+            "peakToPeakDisplacementThreshold",
+            "peakToPeakDisplacement",
             "note",
             "addedByName",
             "addedByEmail",
@@ -269,8 +281,15 @@ export async function listSavedSnapshots(userId: string): Promise<SavedSnapshotR
                 receivedAtUtc: String(entry.receivedAtUtc),
                 sourceTopic: String(entry.sourceTopic ?? ""),
                 controlTopic: String(entry.controlTopic ?? ""),
+                universalNamespace: String(entry.universalNamespace ?? entry.controlTopic ?? ""),
                 contentType: String(entry.contentType ?? "image/jpeg"),
                 imagePayloadLength: Number(entry.imagePayloadLength ?? 0),
+                peakToPeakDisplacementThreshold: entry.peakToPeakDisplacementThreshold == null
+                    ? null
+                    : Number(entry.peakToPeakDisplacementThreshold),
+                peakToPeakDisplacement: entry.peakToPeakDisplacement == null
+                    ? null
+                    : Number(entry.peakToPeakDisplacement),
                 imagePayloadBase64,
                 payloadError,
                 note: String(entry.note ?? ""),

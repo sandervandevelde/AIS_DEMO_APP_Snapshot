@@ -1,4 +1,4 @@
-import { entity, authenticated, int, date, text } from "@microsoft/rayfin-core";
+import { entity, authenticated, int, date, text, decimal } from "@microsoft/rayfin-core";
 
 @entity()
 @authenticated("*", {
@@ -17,11 +17,20 @@ export class SavedSnapshotEntry {
     @text({ optional: true, max: 300 })
     controlTopic?: string;
 
+    @text({ optional: true, max: 500 })
+    universalNamespace?: string;
+
     @text({ max: 100 })
     contentType!: string;
 
     @int()
     imagePayloadLength!: number;
+
+    @decimal({ optional: true })
+    peakToPeakDisplacementThreshold?: number;
+
+    @decimal({ optional: true })
+    peakToPeakDisplacement?: number;
 
     @text({ optional: true, max: 2000 })
     note?: string;
