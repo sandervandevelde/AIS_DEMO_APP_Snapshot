@@ -21,6 +21,10 @@ export interface AppProposalRecord {
     completedAt?: string;
     completedByName?: string;
     completedByEmail?: string;
+    declined: boolean;
+    declinedAt?: string;
+    declinedByName?: string;
+    declinedByEmail?: string;
 }
 
 export interface CompleteAppProposalInput {
@@ -32,6 +36,13 @@ export interface CompleteAppProposalInput {
 
 export interface UndoCompleteAppProposalInput {
     id: string;
+    userId: string;
+}
+
+export interface DeclineAppProposalInput {
+    id: string;
+    declinedByName: string;
+    declinedByEmail?: string;
     userId: string;
 }
 
@@ -59,6 +70,10 @@ export async function listAppProposals(userId: string): Promise<AppProposalRecor
             "completedAt",
             "completedByName",
             "completedByEmail",
+            "declined",
+            "declinedAt",
+            "declinedByName",
+            "declinedByEmail",
         ])
         .where({ user_id: { eq: userId } })
         .orderBy({ completed: "asc", priority: "desc", proposedAt: "desc" })
@@ -76,6 +91,10 @@ export async function listAppProposals(userId: string): Promise<AppProposalRecor
         completedAt: entry.completedAt ? String(entry.completedAt) : undefined,
         completedByName: entry.completedByName ? String(entry.completedByName) : undefined,
         completedByEmail: entry.completedByEmail ? String(entry.completedByEmail) : undefined,
+        declined: Boolean(entry.declined),
+        declinedAt: entry.declinedAt ? String(entry.declinedAt) : undefined,
+        declinedByName: entry.declinedByName ? String(entry.declinedByName) : undefined,
+        declinedByEmail: entry.declinedByEmail ? String(entry.declinedByEmail) : undefined,
     } satisfies AppProposalRecord));
 }
 
@@ -92,6 +111,10 @@ export async function createAppProposal(input: CreateAppProposalInput): Promise<
         completedAt: null,
         completedByName: null,
         completedByEmail: null,
+        declined: false,
+        declinedAt: null,
+        declinedByName: null,
+        declinedByEmail: null,
         user_id: input.userId,
     });
 }
@@ -105,6 +128,10 @@ export async function completeAppProposal(input: CompleteAppProposalInput): Prom
             completedAt: new Date(),
             completedByName: normalizeText(input.completedByName),
             completedByEmail: input.completedByEmail || null,
+            declined: false,
+            declinedAt: null,
+            declinedByName: null,
+            declinedByEmail: null,
         },
     );
 }
@@ -118,6 +145,40 @@ export async function undoCompleteAppProposal(input: UndoCompleteAppProposalInpu
             completedAt: null,
             completedByName: null,
             completedByEmail: null,
+            declined: false,
+            declinedAt: null,
+            declinedByName: null,
+            declinedByEmail: null,
+        },
+    );
+}
+
+export async function declineAppProposal(input: DeclineAppProposalInput): Promise<void> {
+    const client = getRayfinClient();
+    await client.data.AppProposalEntry.update(
+        { id: input.id },
+        {
+            completed: false,
+            completedAt: null,
+            completedByName: null,
+            completedByEmail: null,
+            declined: true,
+            declinedAt: new Date(),
+            declinedByName: normalizeText(input.declinedByName),
+            declinedByEmail: input.declinedByEmail || null,
+        },
+    );
+}
+
+export async function undoDeclineAppProposal(input: UndoCompleteAppProposalInput): Promise<void> {
+    const client = getRayfinClient();
+    await client.data.AppProposalEntry.update(
+        { id: input.id },
+        {
+            declined: false,
+            declinedAt: null,
+            declinedByName: null,
+            declinedByEmail: null,
         },
     );
 }

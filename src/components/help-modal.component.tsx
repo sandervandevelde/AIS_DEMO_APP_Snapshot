@@ -136,10 +136,10 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Proposal entry form</li>
                                 <li>Priority selector</li>
                                 <li>Search across proposal fields, identity, dates, and status</li>
-                                <li>Hide-completed and multi-priority filters</li>
+                                <li>Hide-resolved and multi-priority filters</li>
                                 <li>Total and visible item counts</li>
-                                <li>Open and completed proposal cards</li>
-                                <li>Mark completed, undo completed, and delete actions</li>
+                                <li>Open, approved, and declined proposal cards</li>
+                                <li>Approve or decline open proposals, reopen resolved proposals, and delete actions</li>
                             </ol>
                         </div>
                     </section>
@@ -371,14 +371,14 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
 
                     <section className="space-y-200">
                         <SectionTitle>13. App Proposals</SectionTitle>
-                        <p>The proposals tab is used to collect future feature ideas and track their status.</p>
+                        <p>The proposals tab is used to collect future feature ideas and track whether they are approved or declined.</p>
                         <ol className="list-decimal space-y-100 pl-500 text-foreground">
                             <li>Create a proposal with a title, description, and priority.</li>
                             <li>Filter the visible list by selecting one or more priority levels.</li>
-                            <li>Mark proposals completed when work is done.</li>
-                            <li>Undo completion if the item needs to be reopened.</li>
+                            <li>Approve or decline an open proposal. The decision, timestamp, and signed-in reviewer are recorded.</li>
+                            <li>Undo approval or decline to reopen the proposal.</li>
                             <li>Delete proposal items you no longer want to keep.</li>
-                            <li>Use search and hide-completed to focus on the active backlog.</li>
+                            <li>Use search and hide-resolved to focus on the active backlog.</li>
                         </ol>
                     </section>
 

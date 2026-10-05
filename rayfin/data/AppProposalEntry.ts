@@ -29,6 +29,18 @@ export class AppProposalEntry {
     @date({ optional: true })
     completedAt?: Date;
 
+    @boolean({ optional: true })
+    declined?: boolean;
+
+    @date({ optional: true })
+    declinedAt?: Date;
+
+    @text({ optional: true, max: 200 })
+    declinedByName?: string;
+
+    @text({ optional: true, max: 320 })
+    declinedByEmail?: string;
+
     @text({ optional: true, max: 200 })
     completedByName?: string;
 

@@ -79,12 +79,12 @@ You will see:
 
 1. Proposal entry form
 2. Priority selector
-3. Search across proposal fields, identity, dates, and status
+3. Search across proposal fields, identity, dates, and open, approved, or declined status
 4. Multi-priority filters
-5. Hide completed toggle
+5. Hide resolved toggle
 6. Total and visible item counts
-7. Open and completed proposal cards
-8. Mark completed, undo completed, and delete actions
+7. Open, approved, and declined proposal cards
+8. Approve or decline open proposals, reopen resolved proposals, and delete actions
 
 ## 4. Live Monitoring Features
 
@@ -285,16 +285,17 @@ If payload validation fails:
 
 ## 13. App Proposals
 
-The proposals tab is used to collect future feature ideas and track their status.
+The proposals tab is used to collect future feature ideas and track whether they are approved or declined.
 
 1. Create a proposal with a title, description, and low, medium, or high priority.
 2. The signed-in identity and submission time are added automatically.
 3. Filter the visible list by one or more priority levels.
-4. Search title, description, priority, identity, dates, and open or completed status.
-5. Hide completed proposals to focus on the active backlog.
+4. Search title, description, priority, identity, dates, and open, approved, or declined status.
+5. Hide resolved proposals to focus on the active backlog.
 6. Review total and currently visible proposal counts.
-7. Mark open proposals completed, or undo completion to reopen them.
-8. Delete proposals after confirmation.
+7. Approve or decline open proposals. The decision, timestamp, and signed-in reviewer are recorded.
+8. Undo approval or decline to reopen a proposal.
+9. Delete proposals after confirmation.
 
 ## 14. Recommended Workflow
 

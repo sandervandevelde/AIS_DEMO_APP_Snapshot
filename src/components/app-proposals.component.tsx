@@ -1,12 +1,15 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Check, X } from "lucide-react";
 
 import { useAuth } from "@/hooks/auth.context";
 import {
     completeAppProposal,
     createAppProposal,
+    declineAppProposal,
     deleteAppProposal,
     listAppProposals,
     undoCompleteAppProposal,
+    undoDeclineAppProposal,
     type AppProposalRecord,
 } from "@/services/app-proposals.service";
 
@@ -43,7 +46,7 @@ function buildProposalSearchText(item: AppProposalRecord): string {
         item.proposedAt,
         item.proposedByName,
         item.proposedByEmail ?? "",
-        item.completed ? "completed" : "open",
+        item.completed ? "approved completed" : item.declined ? "declined" : "open pending",
         item.completedAt ?? "",
         item.completedByName ?? "",
         item.completedByEmail ?? "",
@@ -63,7 +66,7 @@ export function AppProposals() {
     const [proposalPriority, setProposalPriority] = useState<ProposalPriority>("medium");
     const [proposalTitle, setProposalTitle] = useState("");
     const [proposalDescription, setProposalDescription] = useState("");
-    const [hideCompleted, setHideCompleted] = useState(false);
+    const [hideResolved, setHideResolved] = useState(false);
     const [searchText, setSearchText] = useState("");
     const [selectedPriorities, setSelectedPriorities] = useState<Record<ProposalPriority, boolean>>({
         low: true,
@@ -101,7 +104,7 @@ export function AppProposals() {
         const search = searchText.trim().toLowerCase();
 
         return proposals.filter((proposal) => {
-            if (hideCompleted && proposal.completed) {
+            if (hideResolved && (proposal.completed || proposal.declined)) {
                 return false;
             }
 
@@ -115,7 +118,7 @@ export function AppProposals() {
 
             return buildProposalSearchText(proposal).includes(search);
         });
-    }, [hideCompleted, proposals, searchText, selectedPriorities]);
+    }, [hideResolved, proposals, searchText, selectedPriorities]);
 
     function togglePriorityFilter(priority: ProposalPriority, enabled: boolean): void {
         setSelectedPriorities((current) => {
@@ -214,6 +217,51 @@ export function AppProposals() {
                 userId: currentUserId,
             });
 
+            await refreshProposals();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setProposalError(message);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    async function handleDeclineProposal(proposalId: string): Promise<void> {
+        if (!currentUserId) {
+            setProposalError("Cannot decline a proposal because user identity is missing.");
+            return;
+        }
+
+        setIsLoading(true);
+        setProposalError(null);
+
+        try {
+            await declineAppProposal({
+                id: proposalId,
+                declinedByName: currentUserDisplayName,
+                declinedByEmail: currentUserEmail,
+                userId: currentUserId,
+            });
+            await refreshProposals();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setProposalError(message);
+        } finally {
+            setIsLoading(false);
+        }
+    }
+
+    async function handleUndoDecline(proposalId: string): Promise<void> {
+        if (!currentUserId) {
+            setProposalError("Cannot reopen a declined proposal because user identity is missing.");
+            return;
+        }
+
+        setIsLoading(true);
+        setProposalError(null);
+
+        try {
+            await undoDeclineAppProposal({ id: proposalId, userId: currentUserId });
             await refreshProposals();
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -371,11 +419,11 @@ export function AppProposals() {
                             <label className="flex items-center gap-200 text-200 text-muted-foreground">
                                 <input
                                     type="checkbox"
-                                    checked={hideCompleted}
-                                    onChange={(event) => setHideCompleted(event.target.checked)}
+                                    checked={hideResolved}
+                                    onChange={(event) => setHideResolved(event.target.checked)}
                                     className="h-4 w-4"
                                 />
-                                Hide completed proposals
+                                Hide resolved proposals
                             </label>
 
                             <div className="rounded-lg border border-border bg-muted/30 p-300 text-200 text-muted-foreground">
@@ -420,8 +468,13 @@ export function AppProposals() {
                                         <p className="text-200 text-muted-foreground">{proposal.description}</p>
                                     </div>
                                     <div className="flex flex-col items-end gap-100">
-                                        <div className={proposal.completed ? "rounded-full bg-emerald-100 px-200 py-100 text-100 font-semibold text-emerald-900" : "rounded-full bg-amber-100 px-200 py-100 text-100 font-semibold text-amber-900"}>
-                                            {proposal.completed ? "Completed" : "Open"}
+                                        <div className={proposal.completed
+                                            ? "rounded-full bg-emerald-100 px-200 py-100 text-100 font-semibold text-emerald-900"
+                                            : proposal.declined
+                                                ? "rounded-full bg-destructive/10 px-200 py-100 text-100 font-semibold text-destructive"
+                                                : "rounded-full bg-amber-100 px-200 py-100 text-100 font-semibold text-amber-900"
+                                        }>
+                                            {proposal.completed ? "Approved" : proposal.declined ? "Declined" : "Open"}
                                         </div>
                                         <div className="rounded-full border border-border bg-background px-200 py-100 text-100 font-semibold text-foreground">
                                             Priority: {proposal.priority}
@@ -434,28 +487,52 @@ export function AppProposals() {
                                     <p><span className="font-semibold">Proposed by:</span> {proposal.proposedByName || "Unknown"}</p>
                                     {proposal.completed ? (
                                         <>
-                                            <p><span className="font-semibold">Completed at:</span> {proposal.completedAt ? formatUtc(proposal.completedAt) : "-"}</p>
-                                            <p><span className="font-semibold">Completed by:</span> {proposal.completedByName || "-"}</p>
+                                            <p><span className="font-semibold">Approved at:</span> {proposal.completedAt ? formatUtc(proposal.completedAt) : "-"}</p>
+                                            <p><span className="font-semibold">Approved by:</span> {proposal.completedByName || "-"}</p>
+                                        </>
+                                    ) : proposal.declined ? (
+                                        <>
+                                            <p><span className="font-semibold">Declined at:</span> {proposal.declinedAt ? formatUtc(proposal.declinedAt) : "-"}</p>
+                                            <p><span className="font-semibold">Declined by:</span> {proposal.declinedByName || "-"}</p>
                                         </>
                                     ) : null}
                                 </div>
 
                                 <div className="mt-300 flex flex-wrap gap-200">
-                                    {!proposal.completed ? (
+                                    {!proposal.completed && !proposal.declined ? (
+                                        <>
                                         <button
                                             type="button"
                                             onClick={() => void handleMarkCompleted(proposal.id)}
-                                            className="rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            className="inline-flex items-center gap-100 rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
-                                            Mark Completed
+                                            <Check className="h-4 w-4" aria-hidden="true" />
+                                            Approve
                                         </button>
-                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleDeclineProposal(proposal.id)}
+                                            className="inline-flex items-center gap-100 rounded-md border border-destructive/40 bg-destructive/10 px-300 py-200 text-200 font-semibold text-destructive hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <X className="h-4 w-4" aria-hidden="true" />
+                                            Decline
+                                        </button>
+                                        </>
+                                    ) : proposal.completed ? (
                                         <button
                                             type="button"
                                             onClick={() => void handleUndoCompleted(proposal.id)}
                                             className="rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
-                                            Undo Completed
+                                            Undo Approval
+                                        </button>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleUndoDecline(proposal.id)}
+                                            className="rounded-md border border-border bg-background px-300 py-200 text-200 font-semibold text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            Undo Decline
                                         </button>
                                     )}
                                     <button
