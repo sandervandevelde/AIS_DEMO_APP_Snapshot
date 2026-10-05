@@ -90,7 +90,8 @@ function formatSnapshotAge(receivedAtUtc: string, nowMs: number): string {
 
 function formatDisplacement(value: number | null): string {
     if (value == null) return "-";
-    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+    const formattedValue = Number.isInteger(value) ? String(value) : value.toFixed(2);
+    return `${formattedValue} µm`;
 }
 
 function toBarPercent(value: number | null, scaleMax: number): number {
@@ -1635,7 +1636,7 @@ export function SnapshotGallery({ viewMode }: SnapshotGalleryProps) {
                                                         <table className="w-full table-fixed text-[11px] leading-tight">
                                                             <thead className="bg-muted/30 text-left text-muted-foreground">
                                                                 <tr>
-                                                                    <th className="px-100 py-[1px] font-semibold">Displacement</th>
+                                                                    <th className="px-100 py-[1px] font-semibold">Displacement (µm)</th>
                                                                     <th className="px-100 py-[1px] text-right font-semibold">Count</th>
                                                                 </tr>
                                                             </thead>

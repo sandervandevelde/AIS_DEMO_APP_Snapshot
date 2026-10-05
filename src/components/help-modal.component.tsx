@@ -102,6 +102,9 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
                                 <li>Per-camera hide controls and restore controls for hidden cameras</li>
                             </ol>
                             <p>Camera labels use the Building, Line, and Sensor parts of the Universal Namespace, separated with `/`. If those UNS parts are unavailable, the numeric camera ID is shown as a fallback.</p>
+                                                    <p>The Advantech WISE-2410 reports displacement in micrometers (µm). Live and saved displacement and threshold values use this unit.</p>
+                                                    <p>Each card shows a compact displacement visual panel. Displacement and threshold values are in micrometers (µm).</p>
+                                                        <li>The table has two columns: Displacement (µm) and Count.</li>
                         </div>
                         <div className="space-y-200">
                             <SubTitle icon={FileImage}>Saved Image Notes</SubTitle>

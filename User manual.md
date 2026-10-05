@@ -43,6 +43,8 @@ You will see:
 12. Displacement histogram when visuals are shown
 13. Per-camera hide controls and restore controls for hidden cameras
 
+The Advantech WISE-2410 reports displacement in micrometers (`µm`). Live and saved displacement and threshold values use this unit.
+
 Camera labels use the Building, Line, and Sensor parts of the Universal Namespace, separated with `/` (for example, `Building-1/Line-2/Sensor-3`). If those UNS parts are unavailable, the numeric camera ID is shown as a fallback.
 
 ### Saved Image Notes
@@ -131,7 +133,7 @@ Each camera card has a shared details toggle in the header.
 
 ### Displacement Mini Chart
 
-Each card shows a compact vertical displacement chart.
+Each card shows a compact vertical displacement chart. Displacement and threshold values are in micrometers (`µm`).
 
 1. The bar fill represents current displacement.
 2. A marker line represents threshold.
@@ -143,7 +145,7 @@ Each card shows a compact vertical displacement chart.
 
 Each card shows a compact displacement summary table.
 
-1. The table has two columns: Displacement and Count.
+1. The table has two columns: Displacement (µm) and Count.
 2. Counts are grouped by rounded displacement value.
 3. The table is compact and scrolls inside its panel when needed.
 
